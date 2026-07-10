@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block titel %} — SSH{% endblock %}
-{% block undertitel %}SSH-anslutningar{% endblock %}
-{% block topphoger %}<a class="btn ghost" href="{{ url_for('home') }}">← Tillbaka</a>{% endblock %}
+{% block undertitel %}{{ t('ssh_anslutningar') }}{% endblock %}
+{% block topphoger %}<a class="btn ghost" href="{{ url_for('home') }}">{{ t('tillbaka') }}</a>{% endblock %}
 {% block innehall %}
 <div class="card">
-  <h2>Ny anslutning</h2>
+  <h2>{{ t('ny_anslutning') }}</h2>
   <form id="ny" class="term-form" style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">
     <div style="grid-column:1/-1">
       <label>Host (t.ex. 10.44.0.5 på VPN-nätet)</label>
@@ -19,16 +19,15 @@
       <input type="text" id="port" value="22" style="margin-bottom:0">
     </div>
     <div style="grid-column:1/-1;margin-top:.6rem">
-      <button type="submit">Anslut (nytt fönster)</button>
+      <button type="submit">{{ t('anslut_nytt_fonster') }}</button>
     </div>
   </form>
 </div>
 
 <div class="card">
-  <h2>Sparade anslutningar</h2>
+  <h2>{{ t('sparade_anslutningar') }}</h2>
   <div id="lista"></div>
-  <p class="muted" id="tom" style="margin-bottom:0">Inga sparade än — anslut ovan
-    så frågar vi om du vill spara.</p>
+  <p class="muted" id="tom" style="margin-bottom:0">{{ t('inga_sparade') }}</p>
 </div>
 
 <script>

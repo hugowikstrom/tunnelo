@@ -49,6 +49,10 @@
   .qr svg{width:100%;height:auto;display:block}
   .muted{color:var(--dim);font-size:.85rem}
   .top{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem}
+  .sprakval{display:flex;gap:.4rem;justify-content:flex-end;margin-bottom:.4rem}
+  .sprakval a{font-size:.8rem;color:var(--dim);text-decoration:none;padding:.2rem .5rem;
+    border:1px solid var(--line);border-radius:6px}
+  .sprakval a.aktiv{color:var(--accent);border-color:var(--accent)}
   /* Mobilanpassning: mindre marginaler och staplad layout på små skärmar */
   @media (max-width:480px){
     body{padding:1rem .8rem}
@@ -62,10 +66,16 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="sprakval">
+    {% for kod, namn in sprak_lista.items() %}
+      <a href="{{ url_for('byt_sprak', lang=kod) }}"
+         class="{{ 'aktiv' if kod == lang else '' }}">{{ kod|upper }}</a>
+    {% endfor %}
+  </div>
   <div class="top">
     <div>
       <div class="brand"><span class="dot"></span>Tunnelo</div>
-      <p class="sub">{% block undertitel %}privat VPN — koppla in dina enheter{% endblock %}</p>
+      <p class="sub">{% block undertitel %}{{ t('tagline') }}{% endblock %}</p>
     </div>
     {% block topphoger %}{% endblock %}
   </div>

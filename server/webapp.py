@@ -52,6 +52,7 @@ from flask import (Flask, Response, redirect, render_template, request,
 from flask_sock import Sock
 
 import hub
+import sprak
 
 app = Flask(__name__)
 
@@ -128,18 +129,20 @@ def generera_kod():
     return f"{secrets.randbelow(1000000):06d}"
 
 
-def skicka_kod(epost, kod):
-    """
-    Maila koden. Prioritet: Resend (API) → SMTP → serverlogg (utvecklingsläge).
-    """
-    amne = "Din Tunnelo-inloggningskod"
-    text = f"Din inloggningskod: {kod}\n\nGäller i 10 minuter."
+def maila(till, amne, text):
+    """Skicka mejl. Prioritet: Resend → SMTP → serverlogg (utvecklingsläge)."""
     if RESEND_KEY:
-        skicka_resend(epost, amne, text)
+        skicka_resend(till, amne, text)
     elif SMTP_HOST:
-        skicka_smtp(epost, amne, text)
+        skicka_smtp(till, amne, text)
     else:
-        print(f"[DEV] Inloggningskod för {epost}: {kod}")
+        print(f"[DEV] Mail till {till}: {amne} :: {text[:80]}")
+
+
+def skicka_kod(epost, kod):
+    """Maila en inloggningskod."""
+    maila(epost, "Din Tunnelo-inloggningskod",
+          f"Din inloggningskod: {kod}\n\nGäller i 10 minuter.")
 
 
 def skicka_resend(till, amne, text):
@@ -248,6 +251,27 @@ def qr_svg(text):
     return buf.getvalue().decode()
 
 
+# --- Språk (i18n) ------------------------------------------------------------
+@app.context_processor
+def injicera_sprak():
+    """Gör t('nyckel'), lang och språklistan tillgängliga i alla mallar."""
+    lang = session.get("lang", "sv")
+    return {
+        "t": lambda nyckel: sprak.t(nyckel, lang),
+        "lang": lang,
+        "sprak_lista": sprak.SPRAK,
+    }
+
+
+@app.route("/sprak/<lang>")
+def byt_sprak(lang):
+    """Byt språk och gå tillbaka dit man var."""
+    if lang in sprak.SPRAK:
+        session["lang"] = lang
+        session.permanent = True
+    return redirect(request.referrer or url_for("home"))
+
+
 # --- Auth ---------------------------------------------------------------------
 def inloggad():
     return session.get("inloggad") is True
@@ -286,7 +310,7 @@ def logga_in(epost, admin):
 @app.before_request
 def krav_login():
     """Bootstrap till setup om ingen admin finns; annars kräv inloggning."""
-    if request.endpoint == "static":
+    if request.endpoint in ("static", "byt_sprak"):
         return
     # Första gången: ingen admin finns → tvinga setup-flödet.
     if not finns_admin():
@@ -533,6 +557,25 @@ def install_skript(device_id):
                              f'attachment; filename="tunnelo-{device["namn"]}.sh"'})
 
 
+@app.route("/devices/<device_id>/maila-lank", methods=["POST"])
+def maila_lank(device_id):
+    """Maila curl-installationslänken till den inloggade användaren."""
+    devices = load_devices()
+    device = next((d for d in devices if d["id"] == device_id), None)
+    if not device:
+        return "Enhet saknas", 404
+    if not device.get("install_token"):
+        device["install_token"] = secrets.token_urlsafe(48)
+        save_devices(devices)
+    curl_url = f"{request.host_url.rstrip('/')}/i/{device['install_token']}"
+    till = session.get("epost")
+    maila(till, "Tunnelo: din installationslänk",
+          f'Installera enheten "{device["namn"]}" med ett kommando:\n\n'
+          f"curl -sSL {curl_url} | sudo bash\n\n"
+          f"Länken är personlig och hemlig — dela den inte.")
+    return redirect(url_for("visa_device", device_id=device_id, mailad="1"))
+
+
 @app.route("/i/<token>")
 def install_via_token(token):
     """
@@ -556,16 +599,10 @@ def install_via_token(token):
 
 def _notifiera_installation(epost, device):
     """Maila ägaren att enhetens config hämtades via curl-länken."""
-    amne = "Tunnelo: en enhet installerades"
-    text = (f'Enheten "{device["namn"]}" ({device["vpn_ip"]}) kopplades just upp '
-            f"via installationslänken.\n\nVar det inte du? Ta bort enheten i "
-            f"Tunnelo-portalen så återkallas nyckeln.")
-    if RESEND_KEY:
-        skicka_resend(epost, amne, text)
-    elif SMTP_HOST:
-        skicka_smtp(epost, amne, text)
-    else:
-        print(f"[DEV] Installationsnotis till {epost}: {device['namn']}")
+    maila(epost, "Tunnelo: en enhet installerades",
+          f'Enheten "{device["namn"]}" ({device["vpn_ip"]}) kopplades just upp '
+          f"via installationslänken.\n\nVar det inte du? Ta bort enheten i "
+          f"Tunnelo-portalen så återkallas nyckeln.")
 
 
 @app.route("/devices/<device_id>/delete", methods=["POST"])

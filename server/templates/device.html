@@ -5,11 +5,15 @@
 <div class="card">
   <h2>{{ device.namn }} · <span class="ip">{{ device.vpn_ip }}</span></h2>
   <div class="qr">{{ qr|safe }}</div>
-  <p class="muted" style="text-align:center">Scanna med WireGuard-appen på mobilen.</p>
+  <p class="muted" style="text-align:center">{{ t('scanna_mobil') }}</p>
 </div>
 
+{% if request.args.mailad %}
+<div class="card" style="border-color:var(--accent2)">✅ {{ t('lank_mailad') }}</div>
+{% endif %}
+
 <div class="card">
-  <h2>Installera</h2>
+  <h2>{{ t('installera') }}</h2>
   <div class="flikar">
     <button class="flik aktiv" data-mal="mobil">📱 Mobil</button>
     <button class="flik" data-mal="linux">🐧 Linux</button>
@@ -33,10 +37,12 @@
     <pre>curl -sSL {{ curl_url }} | sudo bash</pre>
     <p class="muted" style="margin:.4rem 0">Installerar WireGuard, lägger in nyckeln
       och startar tunneln — allt i ett. Länken är hemlig och personlig.</p>
-    <p class="muted" style="margin:.8rem 0 .3rem">Eller ladda ner och kör manuellt:</p>
+    <form method="post" action="{{ url_for('maila_lank', device_id=device.id) }}"
+          style="margin:.6rem 0">
+      <button class="btn" type="submit">{{ t('maila_lank') }}</button>
+    </form>
     <a class="btn green" href="{{ url_for('install_skript', device_id=device.id) }}">
-      ⬇ Installationsskript</a>
-    <pre style="margin-top:.6rem">bash tunnelo-{{ device.namn }}.sh</pre>
+      {{ t('install_skript_knapp') }}</a>
   </div>
 
   <div class="panel" id="mac">
@@ -65,15 +71,19 @@
   <div class="panel" id="server">
     <p><strong>Linux-server</strong> (koppla in en server i nätet) — ett kommando:</p>
     <pre>curl -sSL {{ curl_url }} | sudo bash</pre>
+    <form method="post" action="{{ url_for('maila_lank', device_id=device.id) }}"
+          style="margin:.6rem 0">
+      <button class="btn" type="submit">{{ t('maila_lank') }}</button>
+    </form>
     <p class="muted" style="margin-bottom:0">Tunneln startar automatiskt vid omstart
       om du kör <code>sudo systemctl enable wg-quick@tunnelo</code>.</p>
   </div>
 </div>
 
 <div class="card">
-  <h2>Config (avancerat)</h2>
+  <h2>{{ t('config_avancerat') }}</h2>
   <pre>{{ conf }}</pre>
-  <p class="muted" style="margin-bottom:0">Innehåller din privata nyckel — dela den inte.</p>
+  <p class="muted" style="margin-bottom:0">{{ t('config_privat_varning') }}</p>
 </div>
 
 <style>

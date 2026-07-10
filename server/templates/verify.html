@@ -1,19 +1,19 @@
 {% extends "base.html" %}
-{% block titel %} — verifiera{% endblock %}
+{% block titel %} — {{ t('ange_kod') }}{% endblock %}
 {% block innehall %}
 <div class="card">
-  <h2>{% if setup %}Verifiera administratör{% else %}Ange kod{% endif %}</h2>
-  <p class="muted" style="margin-top:0">Vi mailade en engångskod till
+  <h2>{% if setup %}{{ t('verifiera_admin') }}{% else %}{{ t('ange_kod') }}{% endif %}</h2>
+  <p class="muted" style="margin-top:0">{{ t('kod_mailad') }}
     <strong>{{ epost }}</strong>.</p>
   {% if fel %}<div class="fel">{{ fel }}</div>{% endif %}
   <form method="post">
-    <label for="kod">Inloggningskod</label>
+    <label for="kod">{{ t('inloggningskod') }}</label>
     <input type="text" id="kod" name="kod" autofocus
            inputmode="numeric" autocomplete="one-time-code" placeholder="000000">
-    <button type="submit">Logga in</button>
+    <button type="submit">{{ t('logga_in') }}</button>
   </form>
   <p class="muted" style="margin:.8rem 0 0">
-    <a href="{{ url_for('login') }}" style="color:var(--accent)">← Annan adress</a>
+    <a href="{{ url_for('login') }}" style="color:var(--accent)">{{ t('annan_adress') }}</a>
   </p>
 </div>
 {% endblock %}

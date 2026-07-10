@@ -1,23 +1,20 @@
 {% extends "base.html" %}
-{% block topphoger %}<a class="btn ghost" href="{{ url_for('logout') }}">Logga ut</a>{% endblock %}
+{% block topphoger %}<a class="btn ghost" href="{{ url_for('logout') }}">{{ t('logga_ut') }}</a>{% endblock %}
 {% block innehall %}
 <div class="card">
-  <h2>Ny enhet</h2>
+  <h2>{{ t('ny_enhet') }}</h2>
   <form method="post" action="{{ url_for('skapa_device') }}">
-    <label for="namn">Namn på enheten (t.ex. "min-telefon")</label>
+    <label for="namn">{{ t('enhet_namn_label') }}</label>
     <input type="text" id="namn" name="namn" placeholder="min-telefon">
-    <button type="submit">Skapa &amp; visa QR-kod</button>
+    <button type="submit">{{ t('skapa_qr') }}</button>
   </form>
-  <p class="muted" style="margin-bottom:0">
-    Skapar en WireGuard-config du scannar med
-    <a href="https://www.wireguard.com/install/" style="color:var(--accent)">WireGuard-appen</a>.
-  </p>
+  <p class="muted" style="margin-bottom:0">{{ t('enhet_hjalp') }}</p>
 </div>
 
 <div class="card">
-  <h2>Enheter ({{ devices|length }})</h2>
+  <h2>{{ t('enheter') }} ({{ devices|length }})</h2>
   {% if not devices %}
-    <p class="muted">Inga enheter än — skapa din första ovan.</p>
+    <p class="muted">{{ t('inga_enheter') }}</p>
   {% endif %}
   {% for d in devices %}
   <div class="row">
@@ -28,8 +25,8 @@
     <div style="display:flex;gap:.5rem;align-items:center">
       <a class="btn" href="{{ url_for('visa_device', device_id=d.id) }}">QR</a>
       <form method="post" action="{{ url_for('ta_bort_device', device_id=d.id) }}"
-            onsubmit="return confirm('Ta bort {{ d.namn }}?')">
-        <button class="btn danger" type="submit">Ta bort</button>
+            onsubmit="return confirm('{{ t('ta_bort') }} {{ d.namn }}?')">
+        <button class="btn danger" type="submit">{{ t('ta_bort') }}</button>
       </form>
     </div>
   </div>
@@ -37,13 +34,12 @@
 </div>
 
 <div class="card">
-  <h2>Verktyg</h2>
-  <a class="btn" href="{{ url_for('terminal') }}">Öppna SSH-terminal</a>
-  {% if is_admin %}<a class="btn ghost" href="{{ url_for('users_sida') }}">Hantera användare</a>{% endif %}
-  <p class="muted" style="margin:.8rem 0 0">Öppna en terminal i webbläsaren mot
-    servern eller en maskin på VPN-nätet — funkar även på mobilen.</p>
+  <h2>{{ t('verktyg') }}</h2>
+  <a class="btn" href="{{ url_for('terminal') }}">{{ t('oppna_ssh') }}</a>
+  {% if is_admin %}<a class="btn ghost" href="{{ url_for('users_sida') }}">{{ t('hantera_anvandare') }}</a>{% endif %}
+  <p class="muted" style="margin:.8rem 0 0">{{ t('ssh_hjalp') }}</p>
 </div>
 
-<p class="muted">Servern nås på <span class="ip">{{ endpoint }}</span> ·
-  trafik som går genom VPN: <span class="ip">{{ allowed }}</span></p>
+<p class="muted">{{ t('servern_nas') }} <span class="ip">{{ endpoint }}</span> ·
+  {{ t('trafik_genom') }}: <span class="ip">{{ allowed }}</span></p>
 {% endblock %}

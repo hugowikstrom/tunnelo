@@ -1,18 +1,27 @@
 {% extends "base.html" %}
-{% block titel %} — kom igång{% endblock %}
-{% block undertitel %}första start — skapa administratör{% endblock %}
+{% block titel %} — {{ t('setup_titel') }}{% endblock %}
+{% block undertitel %}{{ t('setup_undertitel') }}{% endblock %}
 {% block innehall %}
 <div class="card">
-  <h2>Välkommen! Skapa administratör</h2>
-  <p class="muted" style="margin-top:0">Ange mailadressen som ska vara admin.
-    Vi mailar en kod för att verifiera den. Admin kan sedan lägga till användare.</p>
+  <h2>{{ t('valj_sprak') }}</h2>
+  <div style="display:flex;gap:.6rem">
+    {% for kod, namn in sprak_lista.items() %}
+      <a class="btn {{ '' if kod == lang else 'ghost' }}"
+         href="{{ url_for('byt_sprak', lang=kod) }}">{{ namn }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ t('setup_titel') }}</h2>
+  <p class="muted" style="margin-top:0">{{ t('setup_hjalp') }}</p>
   {% if fel %}<div class="fel">{{ fel }}</div>{% endif %}
   <form method="post">
-    <label for="epost">Admin-mailadress</label>
+    <label for="epost">{{ t('admin_mail') }}</label>
     <input type="text" id="epost" name="epost" autofocus
            autocapitalize="none" autocomplete="email" inputmode="email"
            placeholder="du@exempel.se">
-    <button type="submit">Skicka kod</button>
+    <button type="submit">{{ t('skicka_kod') }}</button>
   </form>
 </div>
 {% endblock %}
