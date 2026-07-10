@@ -139,10 +139,12 @@ def maila(till, amne, text):
         print(f"[DEV] Mail till {till}: {amne} :: {text[:80]}")
 
 
-def skicka_kod(epost, kod):
-    """Maila en inloggningskod."""
-    maila(epost, "Din Tunnelo-inloggningskod",
-          f"Din inloggningskod: {kod}\n\nGäller i 10 minuter.")
+def skicka_kod(epost, kod, lank):
+    """Maila inloggningskoden + en klickbar magic-länk (ett-klicks inloggning)."""
+    maila(epost, "Din Tunnelo-inloggning",
+          f"Din inloggningskod: {kod}\n\n"
+          f"Eller klicka för att logga in direkt:\n{lank}\n\n"
+          f"Gäller i 10 minuter och kan bara användas en gång.")
 
 
 def skicka_resend(till, amne, text):
@@ -281,22 +283,42 @@ def ar_admin():
     return session.get("admin") is True
 
 
+MAX_FORSOK = 5  # antal felaktiga kodförsök innan koden dör (mot brute-force)
+
+
 def skicka_ny_kod(epost):
-    """Skapa och maila en engångskod, kom ihåg vilken adress som väntar."""
+    """Skapa och maila en engångskod + magic-länk. Kom ihåg vem som väntar."""
     kod = generera_kod()
-    PENDING[epost] = {"kod": kod, "utgang": time.time() + KOD_GILTIGHET}
-    skicka_kod(epost, kod)
+    token = secrets.token_urlsafe(32)
+    PENDING[epost] = {"kod": kod, "token": token, "forsok": 0,
+                      "utgang": time.time() + KOD_GILTIGHET}
+    lank = f"{request.host_url.rstrip('/')}/magic/{token}"
+    skicka_kod(epost, kod, lank)
     session["pending_epost"] = epost
 
 
 def kolla_kod(epost, angiven):
-    """True om koden stämmer och inte gått ut. Förbrukar koden."""
+    """True om koden stämmer och inte gått ut. Räknar försök; för många → dör."""
     post = PENDING.get(epost)
-    if post and time.time() < post["utgang"] and angiven == post["kod"]:
+    if not post or time.time() >= post["utgang"]:
+        return False
+    post["forsok"] = post.get("forsok", 0) + 1
+    if post["forsok"] > MAX_FORSOK:
+        PENDING.pop(epost, None)  # för många gissningar → koden ogiltig
+        return False
+    if angiven == post["kod"]:
         PENDING.pop(epost, None)
         session.pop("pending_epost", None)
         return True
     return False
+
+
+def hitta_magic(token):
+    """Hitta vilken adress en magic-token hör till (om giltig)."""
+    for epost, post in PENDING.items():
+        if post.get("token") == token and time.time() < post["utgang"]:
+            return epost
+    return None
 
 
 def logga_in(epost, admin):
@@ -312,14 +334,15 @@ def krav_login():
     """Bootstrap till setup om ingen admin finns; annars kräv inloggning."""
     if request.endpoint in ("static", "byt_sprak"):
         return
-    # Första gången: ingen admin finns → tvinga setup-flödet.
+    # Första gången: ingen admin finns → tvinga setup-flödet (magic tillåts
+    # så första admin kan logga in via länken i mailet).
     if not finns_admin():
-        if request.endpoint not in ("setup", "setup_verify"):
+        if request.endpoint not in ("setup", "setup_verify", "magic"):
             return redirect(url_for("setup"))
         return
-    # Normalt läge: inloggning/verifiering + curl-installlänk är öppna.
+    # Normalt läge: inloggning/verifiering + magic + curl-installlänk är öppna.
     if request.endpoint in ("login", "verify", "setup", "setup_verify",
-                            "install_via_token"):
+                            "magic", "install_via_token"):
         return
     if not inloggad():
         return redirect(url_for("login"))
@@ -390,6 +413,34 @@ def verify():
             return redirect(url_for("home"))
         fel = "Fel eller utgången kod."
     return render_template("verify.html", epost=epost, fel=fel)
+
+
+@app.route("/magic/<token>", methods=["GET", "POST"])
+def magic(token):
+    """
+    Magic-länk från mailet. GET visar en landningssida med en Logga in-knapp
+    (så att mail-skannrar som "förklickar" länken inte förbrukar den). POST
+    loggar in — skapar admin om det är första gången (setup).
+    """
+    if request.method == "GET":
+        return render_template("magic.html", token=token, fel=None)
+    epost = hitta_magic(token)
+    if not epost:
+        return render_template("magic.html", token=token,
+                               fel="Länken är ogiltig eller har gått ut.")
+    PENDING.pop(epost, None)
+    session.pop("pending_epost", None)
+    if not finns_admin():
+        users = las_anvandare()
+        users[epost] = {"epost": epost, "admin": True, "allowed_ips": hub.NET_CIDR}
+        spara_anvandare(users)
+        logga_in(epost, True)
+    elif epost in las_anvandare():
+        logga_in(epost, las_anvandare()[epost].get("admin", False))
+    else:
+        return render_template("magic.html", token=token,
+                               fel="Adressen är inte registrerad.")
+    return redirect(url_for("home"))
 
 
 @app.route("/logout")
@@ -487,10 +538,8 @@ def visa_device(device_id):
     device = next((d for d in devices if d["id"] == device_id), None)
     if not device:
         return "Enhet saknas", 404
-    # Ge äldre enheter en install-token (för curl-länken) om de saknar en.
-    if not device.get("install_token"):
-        device["install_token"] = secrets.token_urlsafe(48)
-        save_devices(devices)
+    # Färsk install-token (15 min) varje gång sidan visas → curl-raden är alltid giltig.
+    fornya_install_token(device, devices)
     conf = bygg_klientconfig(device)
     curl_url = f"{request.host_url.rstrip('/')}/i/{device['install_token']}"
     return render_template("device.html", device=device, conf=conf,
@@ -564,9 +613,7 @@ def maila_lank(device_id):
     device = next((d for d in devices if d["id"] == device_id), None)
     if not device:
         return "Enhet saknas", 404
-    if not device.get("install_token"):
-        device["install_token"] = secrets.token_urlsafe(48)
-        save_devices(devices)
+    fornya_install_token(device, devices)  # färsk token, 15 min
     curl_url = f"{request.host_url.rstrip('/')}/i/{device['install_token']}"
     till = session.get("epost")
     maila(till, "Tunnelo: din installationslänk",
@@ -576,17 +623,26 @@ def maila_lank(device_id):
     return redirect(url_for("visa_device", device_id=device_id, mailad="1"))
 
 
+def fornya_install_token(device, devices):
+    """Ge enheten en färsk install-token som gäller i 15 minuter, och spara."""
+    device["install_token"] = secrets.token_urlsafe(48)
+    device["token_utgang"] = time.time() + 900  # 15 min
+    save_devices(devices)
+
+
 @app.route("/i/<token>")
 def install_via_token(token):
     """
     Curl-endpoint: kör t.ex.  curl -sSL <url>/i/<token> | sudo bash
-    Token är enhetens hemliga install_token (skapas när enheten skapas av en
-    inloggad användare). Skickar ett notifieringsmail till ägaren.
+    Token är enhetens hemliga install_token — giltig i 15 minuter efter att den
+    utfärdades (när du tittade på enheten eller mailade länken). Notifierar ägaren.
     """
     device = next((d for d in load_devices()
                    if d.get("install_token") == token), None)
     if not device:
         return "# Ogiltig eller återkallad länk\n", 404
+    if time.time() > device.get("token_utgang", 0):
+        return "# Länken har gått ut — hämta en ny i portalen\n", 410
     # Meddela ägaren att configen hämtades (säkerhet: upptäck obehörig användning).
     agare = device.get("agare")
     if agare and agare in las_anvandare():

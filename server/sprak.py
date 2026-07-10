@@ -73,6 +73,8 @@ TEXTER = {
         "host_anv": "Host / användare",
         "auto_start": "Starta automatiskt vid inloggning",
         "oppna_auto": "Öppna auto-anslutning",
+        "magic_titel": "Logga in på Tunnelo",
+        "magic_hjalp": "Klicka på knappen för att slutföra inloggningen.",
     },
     "en": {
         "tagline": "private VPN — connect your devices",
@@ -134,6 +136,8 @@ TEXTER = {
         "host_anv": "Host / user",
         "auto_start": "Start automatically at login",
         "oppna_auto": "Open auto connection",
+        "magic_titel": "Log in to Tunnelo",
+        "magic_hjalp": "Click the button to complete your login.",
     },
 }
 
