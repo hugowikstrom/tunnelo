@@ -53,7 +53,7 @@ TEXTER = {
         "skyddad": "skyddad",
         # device
         "installera": "Installera",
-        "scanna_mobil": "Scanna med WireGuard-appen på mobilen.",
+        "scanna_mobil": "Det här är nyckeln för din mobil. Öppna WireGuard-appen, tryck + och välj \"Scanna QR-kod\" — då är telefonen ansluten. (På dator: använd flikarna nedan istället.)",
         "config_avancerat": "Config (avancerat)",
         "config_privat_varning": "Innehåller din privata nyckel — dela den inte.",
         "ladda_conf": "Ladda ner .conf",
@@ -117,7 +117,7 @@ TEXTER = {
         "spara_nat": "Save networks",
         "skyddad": "protected",
         "installera": "Install",
-        "scanna_mobil": "Scan with the WireGuard app on your phone.",
+        "scanna_mobil": "This is the key for your phone. Open the WireGuard app, tap + and choose \"Scan QR code\" — your phone is then connected. (On a computer: use the tabs below instead.)",
         "config_avancerat": "Config (advanced)",
         "config_privat_varning": "Contains your private key — don't share it.",
         "ladda_conf": "Download .conf",

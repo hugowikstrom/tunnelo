@@ -22,6 +22,7 @@ Miljövariabler:
     TUNNELO_SMTP_PORT/USER/PASS/FROM  SMTP-inställningar.
 """
 import base64
+import hashlib
 import io
 import json
 import os
@@ -86,6 +87,9 @@ DEVICES_FIL = os.path.join(HAR, "devices.json")
 # Användare (mailadress + roll). Bara dessa får logga in. Första användaren
 # skapas via setup-flödet och blir admin.
 USERS_FIL = os.path.join(HAR, "users.json")
+# Betrodda enheter: en långlivad enhetsnyckel (cookie) → adress. Känd enhet
+# loggas in direkt utan mail. Vi lagrar bara hashen av nyckeln.
+TRUSTED_FIL = os.path.join(HAR, "trusted.json")
 
 # Utskick av inloggningskoder. Prioritet: Resend (enklast) → SMTP → serverlogg.
 # Resend: skaffa en API-nyckel på resend.com, sätt TUNNELO_RESEND_KEY.
@@ -122,6 +126,48 @@ def spara_anvandare(users):
 def finns_admin():
     """True om minst en admin är registrerad (annars behövs setup)."""
     return any(u.get("admin") for u in las_anvandare().values())
+
+
+# --- Betrodda enheter --------------------------------------------------------
+def _hash(token):
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def las_trusted():
+    if not os.path.exists(TRUSTED_FIL):
+        return {}
+    with open(TRUSTED_FIL) as f:
+        return json.load(f)
+
+
+def spara_trusted(d):
+    with open(TRUSTED_FIL, "w") as f:
+        json.dump(d, f, indent=2)
+
+
+def betro_enhet(epost):
+    """Skapa en enhetsnyckel, spara dess hash → adress, returnera nyckeln."""
+    token = secrets.token_urlsafe(32)
+    d = las_trusted()
+    d[_hash(token)] = {"epost": epost}
+    spara_trusted(d)
+    return token
+
+
+def trusted_epost(token):
+    """Adressen en betrodd enhetsnyckel hör till (eller None)."""
+    if not token:
+        return None
+    return las_trusted().get(_hash(token), {}).get("epost")
+
+
+def glom_enhet(token):
+    """Ta bort en enhets betrodd-status (vid utloggning)."""
+    if not token:
+        return
+    d = las_trusted()
+    if d.pop(_hash(token), None) is not None:
+        spara_trusted(d)
 
 
 def generera_kod():
@@ -322,16 +368,27 @@ def hitta_magic(token):
 
 
 def logga_in(epost, admin):
-    """Sätt en betrodd (permanent, 30-dagars) session för användaren."""
-    session.permanent = True   # gör cookien långlivad → enheten känns igen
+    """Sätt en inloggad session för användaren."""
+    session.permanent = True
     session["inloggad"] = True
     session["epost"] = epost
     session["admin"] = admin
 
 
+def svara_inloggad(epost, admin):
+    """Logga in, gör enheten betrodd (1-års cookie) och gå till startsidan."""
+    logga_in(epost, admin)
+    token = betro_enhet(epost)
+    resp = redirect(url_for("home"))
+    resp.set_cookie("tunnelo_device", token, max_age=31536000,
+                    httponly=True, secure=True, samesite="Lax")
+    return resp
+
+
 @app.before_request
 def krav_login():
-    """Bootstrap till setup om ingen admin finns; annars kräv inloggning."""
+    """Bootstrap till setup om ingen admin finns; annars kräv inloggning.
+    En betrodd enhet (giltig enhets-cookie) loggas in direkt utan mail."""
     if request.endpoint in ("static", "byt_sprak"):
         return
     # Första gången: ingen admin finns → tvinga setup-flödet (magic tillåts
@@ -345,6 +402,11 @@ def krav_login():
                             "magic", "install_via_token"):
         return
     if not inloggad():
+        # Känd enhet? Logga in direkt utan mail.
+        ep = trusted_epost(request.cookies.get("tunnelo_device"))
+        if ep and ep in las_anvandare():
+            logga_in(ep, las_anvandare()[ep].get("admin", False))
+            return
         return redirect(url_for("login"))
 
 
@@ -379,8 +441,7 @@ def setup_verify():
             users[epost] = {"epost": epost, "admin": True,
                             "allowed_ips": hub.NET_CIDR}
             spara_anvandare(users)
-            logga_in(epost, True)
-            return redirect(url_for("home"))
+            return svara_inloggad(epost, True)
         fel = "Fel eller utgången kod."
     return render_template("verify.html", epost=epost, fel=fel, setup=True)
 
@@ -409,8 +470,7 @@ def verify():
     if request.method == "POST":
         if kolla_kod(epost, request.form.get("kod", "").strip()):
             admin = las_anvandare().get(epost, {}).get("admin", False)
-            logga_in(epost, admin)
-            return redirect(url_for("home"))
+            return svara_inloggad(epost, admin)
         fel = "Fel eller utgången kod."
     return render_template("verify.html", epost=epost, fel=fel)
 
@@ -434,19 +494,21 @@ def magic(token):
         users = las_anvandare()
         users[epost] = {"epost": epost, "admin": True, "allowed_ips": hub.NET_CIDR}
         spara_anvandare(users)
-        logga_in(epost, True)
-    elif epost in las_anvandare():
-        logga_in(epost, las_anvandare()[epost].get("admin", False))
-    else:
-        return render_template("magic.html", token=token,
-                               fel="Adressen är inte registrerad.")
-    return redirect(url_for("home"))
+        return svara_inloggad(epost, True)
+    if epost in las_anvandare():
+        return svara_inloggad(epost, las_anvandare()[epost].get("admin", False))
+    return render_template("magic.html", token=token,
+                           fel="Adressen är inte registrerad.")
 
 
 @app.route("/logout")
 def logout():
+    # Glöm den här enheten (så den inte loggas in automatiskt igen) + rensa allt.
+    glom_enhet(request.cookies.get("tunnelo_device"))
     session.clear()
-    return redirect(url_for("login"))
+    resp = redirect(url_for("login"))
+    resp.delete_cookie("tunnelo_device")
+    return resp
 
 
 # --- Användarhantering (endast admin) ----------------------------------------

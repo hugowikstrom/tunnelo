@@ -1,16 +1,14 @@
 {% extends "base.html" %}
 {% block titel %} — {{ t('logga_in') }}{% endblock %}
 {% block innehall %}
-<div class="card">
-  <h2>{{ t('logga_in') }}</h2>
+<div class="card" style="max-width:340px;margin:1.5rem auto 0">
+  <h2 style="margin-top:0">{{ t('logga_in') }}</h2>
   {% if fel %}<div class="fel">{{ fel }}</div>{% endif %}
   <form method="post">
-    <label for="epost">{{ t('mailadress') }}</label>
-    <input type="text" id="epost" name="epost" autofocus
-           autocapitalize="none" autocomplete="email" inputmode="email"
-           placeholder="du@exempel.se">
-    <button type="submit">{{ t('skicka_kod') }}</button>
+    <input type="text" name="epost" autofocus autocapitalize="none"
+           autocomplete="email" inputmode="email"
+           placeholder="{{ t('mailadress') }}" style="margin-bottom:.7rem">
+    <button type="submit" style="width:100%">{{ t('skicka_kod') }}</button>
   </form>
-  <p class="muted" style="margin:.8rem 0 0">{{ t('login_hjalp') }}</p>
 </div>
 {% endblock %}
