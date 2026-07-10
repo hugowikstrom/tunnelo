@@ -35,30 +35,40 @@ cd server
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Flask kör som root (behövs för wg-kommandon + ev. port 80):
+# Ange tillåtna inloggningsadresser:
+cp allowed_emails.example.txt allowed_emails.txt   # redigera in dina adresser
+
+# Flask kör som root (behövs för wg-kommandon):
 sudo -E env \
-  TUNNELO_LOSEN="hugo" \
-  TUNNELO_ENDPOINT="<serverns-publika-ip>" \
+  TUNNELO_ENDPOINT="tunnelo.nattviken.com" \
   TUNNELO_WEBPORT=8090 \
+  TUNNELO_SMTP_HOST="smtp.din-mailleverantör.se" \
+  TUNNELO_SMTP_USER="..." TUNNELO_SMTP_PASS="..." \
   ./venv/bin/python webapp.py
 ```
+> Utan `TUNNELO_SMTP_HOST` skrivs inloggningskoden i serverloggen istället för
+> att mailas — praktiskt vid test.
 
-Sätt sedan **Caddy** framför för HTTPS (viktigt — nycklar skickas över nätet):
-```bash
-# redigera server/Caddyfile: byt vpn.exempel.se mot din domän (eller :80)
-caddy run --config server/Caddyfile
-```
-Caddy tar port 80/443, fixar TLS-cert automatiskt och skickar vidare till Flask
-på 8090. Öppna sidan, logga in, klicka **Ny enhet**, scanna QR:en.
+**Caddy** står redan framför på `tunnelo.nattviken.com` (i `/etc/caddy/Caddyfile`)
+och proxar till Flask på 8090 med automatisk HTTPS. Öppna
+`https://tunnelo.nattviken.com`, logga in med din mailadress, ange koden, klicka
+**Ny enhet**, scanna QR:en.
+
+### Inloggning (email-tvåstegsverifiering)
+1. Du anger din mailadress.
+2. Finns den i `server/allowed_emails.txt` mailas en 6-siffrig engångskod
+   (annars: *"Adressen är inte registrerad i tvåstegsverifieringen"*).
+3. Du anger koden → inloggad. Koden gäller i 10 minuter och kan bara användas en gång.
 
 ### Miljövariabler (webapp)
 | Variabel | Default | Betydelse |
 |----------|---------|-----------|
-| `TUNNELO_LOSEN` | `hugo` | inloggningslösen på sidan |
 | `TUNNELO_ENDPOINT` | maskinens IP | serverns publika `ip:port` som enheter kopplar mot |
 | `TUNNELO_WEBPORT` | `80` | port Flask lyssnar på (sätt 8090 bakom Caddy) |
 | `TUNNELO_HUB_PORT` | `51820` | WireGuard-navets UDP-port (byt om upptagen) |
-| `TUNNELO_ALLOWED` | `10.44.0.0/24` | vad som routas genom VPN. `0.0.0.0/0` = **full tunnel** (all trafik) |
+| `TUNNELO_ALLOWED` | `10.44.0.0/24` | vad som routas genom VPN. `0.0.0.0/0` = **full tunnel** |
+| `TUNNELO_SMTP_HOST` | (ingen) | SMTP-server för koder. Utan denna loggas koden istället |
+| `TUNNELO_SMTP_PORT/USER/PASS/FROM` | `587` / — | SMTP-inloggning |
 
 ### Web-terminal (SSH i webbläsaren)
 Portalen har en inbyggd SSH-terminal (`Öppna SSH-terminal` på startsidan).

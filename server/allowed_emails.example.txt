@@ -1,0 +1,4 @@
+# Tillåtna mailadresser för inloggning — en per rad.
+# Kopiera denna fil till allowed_emails.txt och fyll i riktiga adresser.
+# Rader som börjar med # ignoreras.
+hugo@bigakwa.com

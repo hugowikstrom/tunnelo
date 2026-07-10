@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block titel %} — verifiera{% endblock %}
+{% block innehall %}
+<div class="card">
+  <h2>Ange kod</h2>
+  <p class="muted" style="margin-top:0">Vi mailade en engångskod till
+    <strong>{{ epost }}</strong>.</p>
+  {% if fel %}<div class="fel">{{ fel }}</div>{% endif %}
+  <form method="post">
+    <label for="kod">Inloggningskod</label>
+    <input type="text" id="kod" name="kod" autofocus
+           inputmode="numeric" autocomplete="one-time-code" placeholder="000000">
+    <button type="submit">Logga in</button>
+  </form>
+  <p class="muted" style="margin:.8rem 0 0">
+    <a href="{{ url_for('login') }}" style="color:var(--accent)">← Annan adress</a>
+  </p>
+</div>
+{% endblock %}

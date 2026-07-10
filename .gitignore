@@ -5,6 +5,8 @@ server/hub_keys/
 server/devices.json
 # innehåller token:
 client/config.ini
+# riktig lista med tillåtna mailadresser (integritet):
+server/allowed_emails.txt
 state.json
 server/state.json
 

@@ -5,9 +5,13 @@
   <h2>Logga in</h2>
   {% if fel %}<div class="fel">{{ fel }}</div>{% endif %}
   <form method="post">
-    <label for="losen">Lösenord</label>
-    <input type="password" id="losen" name="losen" autofocus>
-    <button type="submit">Logga in</button>
+    <label for="epost">Mailadress</label>
+    <input type="text" id="epost" name="epost" autofocus
+           autocapitalize="none" autocomplete="email" inputmode="email"
+           placeholder="du@exempel.se">
+    <button type="submit">Skicka inloggningskod</button>
   </form>
+  <p class="muted" style="margin:.8rem 0 0">Vi mailar en engångskod till din
+    adress om den är registrerad.</p>
 </div>
 {% endblock %}

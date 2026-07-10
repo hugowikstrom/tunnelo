@@ -7,21 +7,29 @@ WireGuard-appen → uppkopplad mot servern.
 Kör (kräver root för port 80 + wg):
     sudo TUNNELO_ENDPOINT=<serverns-publika-ip> ./venv/bin/python webapp.py
 
+Inloggning: email-baserad tvåstegsverifiering. Tillåtna adresser listas i
+server/allowed_emails.txt (en per rad). Vid inloggning matas en mailadress in;
+finns den i listan mailas en engångskod som anges i steg 2.
+
 Miljövariabler:
-    TUNNELO_LOSEN      inloggningslösen (default "hugo")
     TUNNELO_ENDPOINT   serverns publika ip:port som enheter kopplar mot
                      (default: maskinens IP + :51820)
     TUNNELO_WEBPORT    port för webbsidan (default 80)
     TUNNELO_ALLOWED    AllowedIPs i klient-config (default 10.44.0.0/24 =
-                     bara VPN-nätet. Sätt 0.0.0.0/0 för att skicka ALL
-                     trafik genom VPN:et = full tunnel.)
+                     bara VPN-nätet. Sätt 0.0.0.0/0 för = full tunnel.)
+    TUNNELO_SMTP_HOST  SMTP-server för att maila koder. Utan denna skrivs
+                     koden i serverloggen (utvecklingsläge).
+    TUNNELO_SMTP_PORT/USER/PASS/FROM  SMTP-inställningar.
 """
 import base64
 import io
 import json
 import os
 import secrets
+import smtplib
 import socket
+import time
+from email.message import EmailMessage
 
 import qrcode
 import qrcode.image.svg
@@ -36,12 +44,59 @@ app.secret_key = secrets.token_hex(16)  # för sessions-cookien
 sock = Sock(app)  # websockets för web-terminalen
 
 # --- Inställningar ------------------------------------------------------------
-LOSEN = os.environ.get("TUNNELO_LOSEN", "hugo")
 WEBPORT = int(os.environ.get("TUNNELO_WEBPORT", "80"))
 ALLOWED_IPS = os.environ.get("TUNNELO_ALLOWED", hub.NET_CIDR)
 
 HAR = os.path.dirname(os.path.abspath(__file__))
 DEVICES_FIL = os.path.join(HAR, "devices.json")
+# Fil med tillåtna mailadresser (en per rad) — bara dessa får logga in.
+EPOST_FIL = os.path.join(HAR, "allowed_emails.txt")
+
+# SMTP för att skicka inloggningskoder. Sätts ingen SMTP_HOST skrivs koden i
+# serverloggen istället (praktiskt vid test/utveckling).
+SMTP_HOST = os.environ.get("TUNNELO_SMTP_HOST")
+SMTP_PORT = int(os.environ.get("TUNNELO_SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("TUNNELO_SMTP_USER")
+SMTP_PASS = os.environ.get("TUNNELO_SMTP_PASS")
+SMTP_FROM = os.environ.get("TUNNELO_SMTP_FROM", SMTP_USER or "tunnelo@localhost")
+
+KOD_GILTIGHET = 600  # sekunder en inloggningskod gäller (10 min)
+# Väntande koder i minnet: email -> {"kod": "123456", "utgang": <tid>}
+PENDING = {}
+
+
+def las_tillatna_epost():
+    """Läs tillåtna mailadresser från fil (små bokstäver, utan blanktecken)."""
+    if not os.path.exists(EPOST_FIL):
+        return set()
+    with open(EPOST_FIL) as f:
+        return {
+            rad.strip().lower() for rad in f
+            if rad.strip() and not rad.startswith("#")
+        }
+
+
+def generera_kod():
+    """Sexsiffrig engångskod."""
+    return f"{secrets.randbelow(1000000):06d}"
+
+
+def skicka_kod(epost, kod):
+    """Maila koden. Utan SMTP_HOST loggas den istället (utvecklingsläge)."""
+    if not SMTP_HOST:
+        print(f"[DEV] Inloggningskod för {epost}: {kod}")
+        return
+    msg = EmailMessage()
+    msg["Subject"] = "Din Tunnelo-inloggningskod"
+    msg["From"] = SMTP_FROM
+    msg["To"] = epost
+    msg.set_content(f"Din inloggningskod: {kod}\n\nGäller i 10 minuter.")
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
+        if SMTP_PORT in (587, 25):
+            s.starttls()
+        if SMTP_USER:
+            s.login(SMTP_USER, SMTP_PASS)
+        s.send_message(msg)
 
 
 def endpoint():
@@ -118,8 +173,8 @@ def inloggad():
 
 @app.before_request
 def krav_login():
-    """Kräv inloggning för allt utom login-sidan och statiska filer."""
-    if request.endpoint in ("login", "static"):
+    """Kräv inloggning för allt utom login/verifiering och statiska filer."""
+    if request.endpoint in ("login", "verify", "static"):
         return
     if not inloggad():
         return redirect(url_for("login"))
@@ -128,13 +183,38 @@ def krav_login():
 # --- Vyer ---------------------------------------------------------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    """Steg 1: mata in mailadress. Finns den i listan mailas en kod."""
     fel = None
     if request.method == "POST":
-        if request.form.get("losen") == LOSEN:
-            session["inloggad"] = True
-            return redirect(url_for("home"))
-        fel = "Fel lösenord"
+        epost = request.form.get("epost", "").strip().lower()
+        if epost in las_tillatna_epost():
+            kod = generera_kod()
+            PENDING[epost] = {"kod": kod, "utgang": time.time() + KOD_GILTIGHET}
+            skicka_kod(epost, kod)
+            session["pending_epost"] = epost
+            return redirect(url_for("verify"))
+        fel = "Adressen är inte registrerad i tvåstegsverifieringen."
     return render_template("login.html", fel=fel)
+
+
+@app.route("/verify", methods=["GET", "POST"])
+def verify():
+    """Steg 2: mata in koden som mailades."""
+    epost = session.get("pending_epost")
+    if not epost:
+        return redirect(url_for("login"))
+    fel = None
+    if request.method == "POST":
+        post = PENDING.get(epost)
+        angiven = request.form.get("kod", "").strip()
+        if post and time.time() < post["utgang"] and angiven == post["kod"]:
+            PENDING.pop(epost, None)
+            session.pop("pending_epost", None)
+            session["inloggad"] = True
+            session["epost"] = epost
+            return redirect(url_for("home"))
+        fel = "Fel eller utgången kod."
+    return render_template("verify.html", epost=epost, fel=fel)
 
 
 @app.route("/logout")
