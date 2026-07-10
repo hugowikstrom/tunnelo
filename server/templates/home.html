@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block topphoger %}<a class="btn ghost" href="{{ url_for('logout') }}">Logga ut</a>{% endblock %}
+{% block innehall %}
+<div class="card">
+  <h2>Ny enhet</h2>
+  <form method="post" action="{{ url_for('skapa_device') }}">
+    <label for="namn">Namn på enheten (t.ex. "min-telefon")</label>
+    <input type="text" id="namn" name="namn" placeholder="min-telefon">
+    <button type="submit">Skapa &amp; visa QR-kod</button>
+  </form>
+  <p class="muted" style="margin-bottom:0">
+    Skapar en WireGuard-config du scannar med
+    <a href="https://www.wireguard.com/install/" style="color:var(--accent)">WireGuard-appen</a>.
+  </p>
+</div>
+
+<div class="card">
+  <h2>Enheter ({{ devices|length }})</h2>
+  {% if not devices %}
+    <p class="muted">Inga enheter än — skapa din första ovan.</p>
+  {% endif %}
+  {% for d in devices %}
+  <div class="row">
+    <div>
+      <strong>{{ d.namn }}</strong><br>
+      <span class="ip">{{ d.vpn_ip }}</span>
+    </div>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <a class="btn" href="{{ url_for('visa_device', device_id=d.id) }}">QR</a>
+      <form method="post" action="{{ url_for('ta_bort_device', device_id=d.id) }}"
+            onsubmit="return confirm('Ta bort {{ d.namn }}?')">
+        <button class="btn danger" type="submit">Ta bort</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<p class="muted">Servern nås på <span class="ip">{{ endpoint }}</span> ·
+  trafik som går genom VPN: <span class="ip">{{ allowed }}</span></p>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titel %} — {{ device.namn }}{% endblock %}
+{% block topphoger %}<a class="btn ghost" href="{{ url_for('home') }}">← Tillbaka</a>{% endblock %}
+{% block innehall %}
+<div class="card">
+  <h2>{{ device.namn }} · <span class="ip">{{ device.vpn_ip }}</span></h2>
+  <div class="qr">{{ qr|safe }}</div>
+  <p class="muted" style="text-align:center">
+    Öppna <strong>WireGuard-appen</strong> → "+" → <em>Scanna QR-kod</em>.
+  </p>
+  <div style="text-align:center;margin-top:1rem">
+    <a class="btn green" href="{{ url_for('ladda_config', device_id=device.id) }}">
+      Ladda ner .conf (för dator)
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Config</h2>
+  <pre>{{ conf }}</pre>
+  <p class="muted" style="margin-bottom:0">Den privata nyckeln finns bara i den här
+    filen — dela den inte.</p>
+</div>
+{% endblock %}

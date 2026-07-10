@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tunnelo{% block titel %}{% endblock %}</title>
+<style>
+  :root{
+    --bg:#0d1117; --card:#161b22; --line:#26303d; --txt:#e6edf3;
+    --dim:#8b949e; --accent:#3fb6ff; --accent2:#2ea043; --danger:#da3633;
+  }
+  @media (prefers-color-scheme:light){
+    :root{--bg:#f4f7fb;--card:#fff;--line:#e2e8f0;--txt:#0d1117;--dim:#5b6672;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    line-height:1.5;padding:2rem 1rem}
+  .wrap{max-width:640px;margin:0 auto}
+  .brand{display:flex;align-items:center;gap:.6rem;font-size:1.6rem;
+    font-weight:700;margin-bottom:.2rem}
+  .brand .dot{width:1.6rem;height:1.6rem;border-radius:50%;
+    background:radial-gradient(circle at 30% 30%,var(--accent),#0a66aa);
+    box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 20%,transparent)}
+  .sub{color:var(--dim);margin:0 0 1.6rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:1.4rem;margin-bottom:1rem}
+  h2{margin:.2rem 0 1rem;font-size:1.15rem}
+  label{display:block;font-size:.85rem;color:var(--dim);margin-bottom:.3rem}
+  input[type=text],input[type=password]{width:100%;padding:.7rem .8rem;
+    border:1px solid var(--line);border-radius:9px;background:var(--bg);
+    color:var(--txt);font-size:1rem;margin-bottom:1rem}
+  button,.btn{display:inline-block;border:0;border-radius:9px;padding:.7rem 1.1rem;
+    font-size:.95rem;font-weight:600;cursor:pointer;text-decoration:none;
+    background:var(--accent);color:#04121f}
+  .btn.green{background:var(--accent2);color:#fff}
+  .btn.ghost{background:transparent;color:var(--dim);border:1px solid var(--line)}
+  .btn.danger{background:transparent;color:var(--danger);border:1px solid var(--line);
+    padding:.4rem .7rem;font-size:.8rem}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+    padding:.7rem 0;border-top:1px solid var(--line)}
+  .row:first-child{border-top:0}
+  .ip{font-family:ui-monospace,monospace;color:var(--accent)}
+  .fel{color:var(--danger);font-size:.9rem;margin-bottom:1rem}
+  pre{background:var(--bg);border:1px solid var(--line);border-radius:9px;
+    padding:1rem;overflow:auto;font-size:.8rem;white-space:pre-wrap;word-break:break-all}
+  .qr{background:#fff;border-radius:12px;padding:1rem;width:230px;margin:0 auto 1rem;
+    display:block}
+  .qr svg{width:100%;height:auto;display:block}
+  .muted{color:var(--dim);font-size:.85rem}
+  .top{display:flex;justify-content:space-between;align-items:flex-start}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <div class="brand"><span class="dot"></span>Tunnelo</div>
+      <p class="sub">{% block undertitel %}privat VPN — koppla in dina enheter{% endblock %}</p>
+    </div>
+    {% block topphoger %}{% endblock %}
+  </div>
+  {% block innehall %}{% endblock %}
+</div>
+</body>
+</html>

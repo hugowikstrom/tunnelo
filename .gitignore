@@ -1,0 +1,17 @@
+# Hemligheter — får ALDRIG upp på GitHub
+# navets privata WireGuard-nyckel:
+server/hub_keys/
+# enheters privata nycklar:
+server/devices.json
+# innehåller token:
+client/config.ini
+state.json
+server/state.json
+
+# Python
+server/venv/
+__pycache__/
+*.pyc
+
+# WireGuard-configar som genereras lokalt
+*.conf

@@ -1,0 +1,87 @@
+# Tunnelo
+
+Ett privat, krypterat VPN i Tailscale-stil, byggt i Python ovanpå WireGuard.
+Kan köras på två sätt:
+
+- **Webbportal (hub-and-spoke)** ← *det snygga flödet.* Logga in på en websida,
+  skapa en enhet, scanna en QR-kod med officiella WireGuard-appen → uppkopplad.
+- **Mesh (klient-agent)** — noder kopplar direkt till varandra via en CLI.
+  (Se längst ner.)
+
+---
+
+## Webbportal (rekommenderat)
+
+### Så funkar det
+```
+   telefon/dator  ──scanna QR──►  WireGuard-app  ──UDP-tunnel──►  Tunnelo-nav (servern)
+        ▲                                                              │
+        └────────── webbsida på port 80/443 (Caddy → Flask) ──────────┘
+                    (här loggar du in & skapar enheten)
+```
+
+- **Webbsidan** (Flask) körs på port 80/443 — där loggar du in och skapar enheter.
+- **Navet** är ett WireGuard-interface (`tunnelo-hub`, 10.44.0.1) som alla enheter
+  kopplar in mot. Servern lägger till din enhet som *peer* live.
+- **Klienten** är den **officiella WireGuard-appen** (iOS/Android/dator, gratis).
+  Du scannar bara QR-koden — ingen egen app behövs.
+
+> **Obs:** WireGuard är UDP och går på port 51820, inte "genom" port 80.
+> Webb*portalen* går på 80/443; VPN-*tunneln* på UDP 51820.
+
+### Kör
+```bash
+cd server
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+# Flask kör som root (behövs för wg-kommandon + ev. port 80):
+sudo -E env \
+  TUNNELO_LOSEN="hugo" \
+  TUNNELO_ENDPOINT="<serverns-publika-ip>" \
+  TUNNELO_WEBPORT=8090 \
+  ./venv/bin/python webapp.py
+```
+
+Sätt sedan **Caddy** framför för HTTPS (viktigt — nycklar skickas över nätet):
+```bash
+# redigera server/Caddyfile: byt vpn.exempel.se mot din domän (eller :80)
+caddy run --config server/Caddyfile
+```
+Caddy tar port 80/443, fixar TLS-cert automatiskt och skickar vidare till Flask
+på 8090. Öppna sidan, logga in, klicka **Ny enhet**, scanna QR:en.
+
+### Miljövariabler (webapp)
+| Variabel | Default | Betydelse |
+|----------|---------|-----------|
+| `TUNNELO_LOSEN` | `hugo` | inloggningslösen på sidan |
+| `TUNNELO_ENDPOINT` | maskinens IP | serverns publika `ip:port` som enheter kopplar mot |
+| `TUNNELO_WEBPORT` | `80` | port Flask lyssnar på (sätt 8090 bakom Caddy) |
+| `TUNNELO_HUB_PORT` | `51820` | WireGuard-navets UDP-port (byt om upptagen) |
+| `TUNNELO_ALLOWED` | `10.44.0.0/24` | vad som routas genom VPN. `0.0.0.0/0` = **full tunnel** (all trafik) |
+
+---
+
+## Mesh (klient-agent) — alternativ
+
+Noder kopplar direkt till varandra via en CLI istället för mot ett nav.
+
+```bash
+# server
+cd server && source venv/bin/activate
+TUNNELO_TOKEN="min-token" TUNNELO_PORT=8088 python app.py
+
+# klient
+cd client && cp config.example.ini config.ini   # fyll i server_url + token
+sudo python3 tunnelo.py up        # up | down | status | sync
+```
+
+---
+
+## Avgränsningar (MVP)
+- **Ingen NAT-traversering** ännu — servern/navet behöver publik, nåbar IP.
+- Servern genererar enhetens privata nyckel (standard för QR-portaler, men mindre
+  "rent" än att klienten gör det själv). Nyckeln finns bara i den nedladdade filen.
+- Enkel inloggning (delat lösen). Riktig per-användare-auth blir senare.
+
+Se `../.claude/plans/soft-scribbling-whale.md` för plan och nästa steg.

@@ -1,0 +1,20 @@
+# Caddy sitter framför Tunnelo-webbappen och ger automatisk HTTPS.
+# Flask kör internt på 8090; Caddy tar emot trafiken utåt.
+#
+# Kör:  caddy run --config Caddyfile
+#
+# Byt ut adressen på första raden:
+#   - har du en domän:  vpn.dindoman.se   -> Caddy fixar Let's Encrypt-cert automatiskt
+#   - bara lokalt/IP:    :80              -> ren HTTP (ingen TLS)
+#   - lokal HTTPS-test:  localhost        -> Caddy gör ett self-signed cert
+
+tunnelo.nattviken.com {
+	# Skicka all trafik vidare till Flask-appen.
+	reverse_proxy localhost:8090
+
+	# (valfritt) extra skydd ovanpå appens egen inloggning — avkommentera och
+	# sätt en hash med:  caddy hash-password
+	# basic_auth {
+	# 	admin <bcrypt-hash>
+	# }
+}
