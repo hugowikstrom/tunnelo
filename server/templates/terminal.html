@@ -1,79 +1,96 @@
 {% extends "base.html" %}
-{% block titel %} — terminal{% endblock %}
-{% block undertitel %}SSH-terminal i webbläsaren{% endblock %}
+{% block titel %} — SSH{% endblock %}
+{% block undertitel %}SSH-anslutningar{% endblock %}
 {% block topphoger %}<a class="btn ghost" href="{{ url_for('home') }}">← Tillbaka</a>{% endblock %}
 {% block innehall %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
-<style>
-  #term{height:65vh;border-radius:9px;overflow:hidden}
-  .term-form{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
-  .term-form .full{grid-column:1/-1}
-  .term-form input{margin-bottom:0}
-</style>
-
-<div class="card" id="anslut-kort">
-  <h2>Anslut via SSH</h2>
-  <form class="term-form" id="anslut">
-    <div class="full">
-      <label>Host (t.ex. localhost eller 10.44.0.x på VPN:et)</label>
-      <input type="text" id="host" value="localhost">
+<div class="card">
+  <h2>Ny anslutning</h2>
+  <form id="ny" class="term-form" style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">
+    <div style="grid-column:1/-1">
+      <label>Host (t.ex. 10.44.0.5 på VPN-nätet)</label>
+      <input type="text" id="host" placeholder="10.44.0.5" style="margin-bottom:0">
     </div>
     <div>
       <label>Användare</label>
-      <input type="text" id="user" autocapitalize="none" autocomplete="username">
+      <input type="text" id="user" autocapitalize="none" style="margin-bottom:0">
     </div>
     <div>
       <label>Port</label>
-      <input type="text" id="port" value="22">
+      <input type="text" id="port" value="22" style="margin-bottom:0">
     </div>
-    <div class="full">
-      <label>Lösenord</label>
-      <input type="password" id="password" autocomplete="current-password">
-    </div>
-    <div class="full">
-      <button type="submit">Öppna terminal</button>
+    <div style="grid-column:1/-1;margin-top:.6rem">
+      <button type="submit">Anslut (nytt fönster)</button>
     </div>
   </form>
 </div>
 
-<div class="card" id="term-kort" style="display:none">
-  <div id="term"></div>
+<div class="card">
+  <h2>Sparade anslutningar</h2>
+  <div id="lista"></div>
+  <p class="muted" id="tom" style="margin-bottom:0">Inga sparade än — anslut ovan
+    så frågar vi om du vill spara.</p>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script>
-document.getElementById('anslut').addEventListener('submit', function(e){
+const NYCKEL = 'tunnelo_ssh';
+const las = () => JSON.parse(localStorage.getItem(NYCKEL) || '[]');
+const spara = (l) => localStorage.setItem(NYCKEL, JSON.stringify(l));
+const idFor = (c) => `${c.user}@${c.host}:${c.port}`;
+
+// Öppnar SSH-sessionen i ett NYTT fönster (host/user/port i URL, aldrig lösen).
+function oppna(c){
+  const q = new URLSearchParams({host:c.host, user:c.user, port:c.port});
+  window.open('/terminal/session?' + q.toString(), '_blank',
+              'width=900,height=620,noopener');
+}
+
+function rita(){
+  const lista = document.getElementById('lista');
+  let conns = las();
+  // favoriter överst
+  conns.sort((a,b) => (b.favorit?1:0) - (a.favorit?1:0));
+  document.getElementById('tom').style.display = conns.length ? 'none' : 'block';
+  lista.innerHTML = '';
+  conns.forEach((c) => {
+    const rad = document.createElement('div');
+    rad.className = 'row';
+    rad.innerHTML = `
+      <div style="flex:1;cursor:pointer" class="oppna">
+        <strong>${idFor(c)}</strong>
+      </div>
+      <div style="display:flex;gap:.4rem">
+        <button class="btn ghost stjarna" title="Favorit">${c.favorit ? '★' : '☆'}</button>
+        <button class="btn danger bort">Ta bort</button>
+      </div>`;
+    rad.querySelector('.oppna').onclick = () => oppna(c);
+    rad.querySelector('.stjarna').onclick = () => {
+      const l = las(); const t = l.find(x => idFor(x)===idFor(c));
+      if (t){ t.favorit = !t.favorit; spara(l); rita(); }
+    };
+    rad.querySelector('.bort').onclick = () => {
+      spara(las().filter(x => idFor(x)!==idFor(c))); rita();
+    };
+    lista.appendChild(rad);
+  });
+}
+
+document.getElementById('ny').addEventListener('submit', (e) => {
   e.preventDefault();
-  document.getElementById('anslut-kort').style.display = 'none';
-  document.getElementById('term-kort').style.display = 'block';
-
-  const term = new Terminal({fontSize:14, theme:{background:'#0d1117'}});
-  const fit = new FitAddon.FitAddon();
-  term.loadAddon(fit);
-  term.open(document.getElementById('term'));
-  fit.fit();
-
-  // wss om sidan är https, annars ws
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(proto + '://' + location.host + '/terminal/ws');
-
-  ws.onopen = function(){
-    ws.send(JSON.stringify({
-      host: document.getElementById('host').value,
-      port: document.getElementById('port').value,
-      user: document.getElementById('user').value,
-      password: document.getElementById('password').value,
-      cols: term.cols, rows: term.rows
-    }));
-    term.focus();
+  const c = {
+    host: document.getElementById('host').value.trim(),
+    user: document.getElementById('user').value.trim(),
+    port: (document.getElementById('port').value.trim() || '22'),
+    favorit: false
   };
-  ws.onmessage = function(ev){ term.write(ev.data); };
-  ws.onclose = function(){ term.write('\r\n\x1b[33m[frånkopplad]\x1b[0m\r\n'); };
-  term.onData(function(d){ ws.send(d); });
-
-  // anpassa storleken när fönstret ändras
-  window.addEventListener('resize', function(){ fit.fit(); });
+  if (!c.host || !c.user) return;
+  // fråga om den ska sparas i listan (om inte redan sparad)
+  const finns = las().some(x => idFor(x)===idFor(c));
+  if (!finns && confirm('Spara den här anslutningen i listan?')){
+    const l = las(); l.push(c); spara(l); rita();
+  }
+  oppna(c);
 });
+
+rita();
 </script>
 {% endblock %}

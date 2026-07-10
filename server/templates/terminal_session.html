@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SSH {{ user }}@{{ host }}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<style>
+  html,body{margin:0;height:100%;background:#0d1117;color:#e6edf3;
+    font-family:system-ui,-apple-system,sans-serif}
+  #topp{padding:.6rem .8rem;display:flex;gap:.6rem;align-items:center;
+    border-bottom:1px solid #26303d}
+  #topp strong{font-family:ui-monospace,monospace;color:#3fb6ff}
+  input{padding:.5rem .6rem;border:1px solid #26303d;border-radius:8px;
+    background:#161b22;color:#e6edf3;font-size:16px}
+  button{padding:.5rem .9rem;border:0;border-radius:8px;background:#3fb6ff;
+    color:#04121f;font-weight:600;cursor:pointer}
+  #term{height:calc(100% - 52px)}
+</style>
+</head>
+<body>
+<div id="topp">
+  <span>SSH <strong>{{ user }}@{{ host }}:{{ port }}</strong></span>
+  <input type="password" id="password" placeholder="Lösenord" autofocus>
+  <button id="anslut">Anslut</button>
+</div>
+<div id="term"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script>
+const HOST = {{ host|tojson }}, USER = {{ user|tojson }}, PORT = {{ port|tojson }};
+
+function start(){
+  const term = new Terminal({fontSize:14, theme:{background:'#0d1117'}});
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(document.getElementById('term'));
+  fit.fit();
+
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(proto + '://' + location.host + '/terminal/ws');
+  ws.onopen = () => {
+    ws.send(JSON.stringify({
+      host:HOST, port:PORT, user:USER,
+      password: document.getElementById('password').value,
+      cols: term.cols, rows: term.rows
+    }));
+    term.focus();
+  };
+  ws.onmessage = (ev) => term.write(ev.data);
+  ws.onclose = () => term.write('\r\n\x1b[33m[frånkopplad]\x1b[0m\r\n');
+  term.onData((d) => ws.send(d));
+  window.addEventListener('resize', () => fit.fit());
+}
+
+document.getElementById('anslut').addEventListener('click', function(){
+  document.getElementById('topp').querySelector('input').disabled = true;
+  this.disabled = true;
+  start();
+});
+// Enter i lösenfältet ansluter
+document.getElementById('password').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('anslut').click();
+});
+</script>
+</body>
+</html>

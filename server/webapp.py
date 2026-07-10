@@ -30,6 +30,7 @@ import smtplib
 import socket
 import time
 import urllib.request
+from datetime import timedelta
 from email.message import EmailMessage
 
 # Ladda hemligheter/inställningar från server/.env (KEY=VALUE per rad) om filen
@@ -53,7 +54,24 @@ from flask_sock import Sock
 import hub
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)  # för sessions-cookien
+
+# Stabil hemlig nyckel (sparas till fil) så inloggningar överlever omstart —
+# annars loggas alla ut varje gång servern startar om.
+_HAR = os.path.dirname(os.path.abspath(__file__))
+_nyckelfil = os.path.join(_HAR, "secret.key")
+if os.path.exists(_nyckelfil):
+    with open(_nyckelfil) as _f:
+        app.secret_key = _f.read().strip()
+else:
+    app.secret_key = secrets.token_hex(32)
+    with open(_nyckelfil, "w") as _f:
+        _f.write(app.secret_key)
+    os.chmod(_nyckelfil, 0o600)
+
+# "Betrodd enhet": sessionen (cookien) gäller i 30 dagar, så en igenkänd
+# webbläsare loggas in direkt utan ny kod.
+app.permanent_session_lifetime = timedelta(days=30)
+
 sock = Sock(app)  # websockets för web-terminalen
 
 # --- Inställningar ------------------------------------------------------------
@@ -194,8 +212,16 @@ def next_ip(devices):
 
 
 # --- WireGuard-config för en enhet -------------------------------------------
+def anvandar_allowed_ips(epost):
+    """Vilka nät/IP en användare når. Fallback: globala ALLOWED_IPS."""
+    u = las_anvandare().get(epost or "", {})
+    return u.get("allowed_ips") or ALLOWED_IPS
+
+
 def bygg_klientconfig(device):
-    """Bygg den .conf som enheten (WireGuard-appen) ska använda."""
+    """Bygg den .conf som enheten (WireGuard-appen) ska använda.
+    AllowedIPs styrs av ägarens tilldelade nät (olika användare → olika nät)."""
+    allowed = anvandar_allowed_ips(device.get("agare"))
     return "\n".join([
         "[Interface]",
         f"PrivateKey = {device['priv']}",
@@ -205,7 +231,7 @@ def bygg_klientconfig(device):
         "[Peer]",
         f"PublicKey = {hub.server_pubkey()}",
         f"Endpoint = {endpoint()}",
-        f"AllowedIPs = {ALLOWED_IPS}",
+        f"AllowedIPs = {allowed}",
         "PersistentKeepalive = 25",
         "",
     ])
@@ -245,6 +271,14 @@ def kolla_kod(epost, angiven):
         session.pop("pending_epost", None)
         return True
     return False
+
+
+def logga_in(epost, admin):
+    """Sätt en betrodd (permanent, 30-dagars) session för användaren."""
+    session.permanent = True   # gör cookien långlivad → enheten känns igen
+    session["inloggad"] = True
+    session["epost"] = epost
+    session["admin"] = admin
 
 
 @app.before_request
@@ -292,11 +326,10 @@ def setup_verify():
     if request.method == "POST":
         if kolla_kod(epost, request.form.get("kod", "").strip()):
             users = las_anvandare()
-            users[epost] = {"epost": epost, "admin": True}
+            users[epost] = {"epost": epost, "admin": True,
+                            "allowed_ips": hub.NET_CIDR}
             spara_anvandare(users)
-            session["inloggad"] = True
-            session["epost"] = epost
-            session["admin"] = True
+            logga_in(epost, True)
             return redirect(url_for("home"))
         fel = "Fel eller utgången kod."
     return render_template("verify.html", epost=epost, fel=fel, setup=True)
@@ -325,9 +358,8 @@ def verify():
     fel = None
     if request.method == "POST":
         if kolla_kod(epost, request.form.get("kod", "").strip()):
-            session["inloggad"] = True
-            session["epost"] = epost
-            session["admin"] = las_anvandare().get(epost, {}).get("admin", False)
+            admin = las_anvandare().get(epost, {}).get("admin", False)
+            logga_in(epost, admin)
             return redirect(url_for("home"))
         fel = "Fel eller utgången kod."
     return render_template("verify.html", epost=epost, fel=fel)
@@ -345,7 +377,7 @@ def users_sida():
     if not ar_admin():
         return redirect(url_for("home"))
     return render_template("users.html", users=list(las_anvandare().values()),
-                           jag=session.get("epost"))
+                           jag=session.get("epost"), default_ips=hub.NET_CIDR)
 
 
 @app.route("/users", methods=["POST"])
@@ -353,11 +385,28 @@ def skapa_user():
     if not ar_admin():
         return redirect(url_for("home"))
     epost = request.form.get("epost", "").strip().lower()
+    # Vilka nät/IP användaren ska nå via VPN (kommaseparerat, CIDR).
+    allowed = request.form.get("allowed_ips", "").strip() or hub.NET_CIDR
     if "@" in epost:
         users = las_anvandare()
         if epost not in users:
-            users[epost] = {"epost": epost, "admin": False}
+            users[epost] = {"epost": epost, "admin": False,
+                            "allowed_ips": allowed}
             spara_anvandare(users)
+    return redirect(url_for("users_sida"))
+
+
+@app.route("/users/allowed", methods=["POST"])
+def uppdatera_allowed():
+    """Admin ändrar vilka nät/IP en användare når."""
+    if not ar_admin():
+        return redirect(url_for("home"))
+    epost = request.form.get("epost", "").strip().lower()
+    allowed = request.form.get("allowed_ips", "").strip() or hub.NET_CIDR
+    users = las_anvandare()
+    if epost in users:
+        users[epost]["allowed_ips"] = allowed
+        spara_anvandare(users)
     return redirect(url_for("users_sida"))
 
 
@@ -396,6 +445,7 @@ def skapa_device():
         "priv": priv,
         "pub": pub,
         "vpn_ip": vpn_ip,
+        "agare": session.get("epost"),  # vem enheten tillhör
     }
     hub.add_peer(pub, vpn_ip)
     devices.append(device)
@@ -438,8 +488,19 @@ def ta_bort_device(device_id):
 # --- Web-terminal (SSH i webbläsaren) ----------------------------------------
 @app.route("/terminal")
 def terminal():
-    """Sida med en terminal (xterm.js) man kan öppna en SSH-session i."""
+    """Hub: sparade SSH-anslutningar (favoriter) + ny anslutning. Sessioner
+    öppnas i eget fönster via /terminal/session."""
     return render_template("terminal.html")
+
+
+@app.route("/terminal/session")
+def terminal_session():
+    """Själva terminalen — öppnas i ett nytt fönster. host/user/port kommer
+    som URL-parametrar (aldrig lösenord, det anges i fönstret)."""
+    return render_template("terminal_session.html",
+                           host=request.args.get("host", ""),
+                           user=request.args.get("user", ""),
+                           port=request.args.get("port", "22"))
 
 
 @sock.route("/terminal/ws")

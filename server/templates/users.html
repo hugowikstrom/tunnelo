@@ -8,19 +8,30 @@
     <label for="epost">Mailadress</label>
     <input type="text" id="epost" name="epost" autocapitalize="none"
            inputmode="email" placeholder="ny.anvandare@exempel.se">
+    <label for="allowed_ips">Nät/IP användaren når (CIDR, kommaseparerat)</label>
+    <input type="text" id="allowed_ips" name="allowed_ips"
+           placeholder="{{ default_ips }}">
     <button type="submit">Lägg till</button>
   </form>
-  <p class="muted" style="margin-bottom:0">Användaren kan sedan logga in med sin
-    mailadress och en engångskod.</p>
+  <p class="muted" style="margin-bottom:0">Lämna nät tomt för standard
+    (<span class="ip">{{ default_ips }}</span> = hela VPN-nätet). Exempel för
+    begränsning: <span class="ip">10.44.0.0/24, 192.168.1.10/32</span>.</p>
 </div>
 
 <div class="card">
   <h2>Användare ({{ users|length }})</h2>
   {% for u in users %}
   <div class="row">
-    <div>
+    <div style="flex:1">
       <strong>{{ u.epost }}</strong>
       {% if u.admin %}<span class="ip"> · admin</span>{% endif %}
+      <form method="post" action="{{ url_for('uppdatera_allowed') }}"
+            style="display:flex;gap:.4rem;margin-top:.5rem">
+        <input type="hidden" name="epost" value="{{ u.epost }}">
+        <input type="text" name="allowed_ips" value="{{ u.allowed_ips or default_ips }}"
+               style="margin-bottom:0;flex:1">
+        <button class="btn ghost" type="submit" style="padding:.4rem .7rem;font-size:.8rem">Spara nät</button>
+      </form>
     </div>
     <div>
       {% if u.admin %}
