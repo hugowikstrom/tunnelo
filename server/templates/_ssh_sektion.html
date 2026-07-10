@@ -14,8 +14,10 @@
     padding:.2rem;line-height:0;border-radius:6px}
   .ikon:hover{color:var(--accent)}
   .ikon.pa{color:var(--accent)}
-  .term-form{display:grid;grid-template-columns:2fr 1fr auto;gap:.5rem;align-items:end}
-  .term-form input{margin-bottom:0}
+  .term-form{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+  .term-form input{margin-bottom:0;flex:1;min-width:7rem}
+  .term-form input#port{flex:0 0 4.2rem;min-width:0}
+  .term-form button{flex:0 0 auto}
   #autobanner{display:none;background:var(--card);border:1px solid var(--accent);
     border-radius:10px;padding:.7rem 1rem;margin-bottom:1rem;align-items:center;
     justify-content:space-between;gap:1rem}
@@ -29,10 +31,11 @@
 <div class="card tight">
   <h2>{{ t('ny_anslutning') }}</h2>
   <form id="ny" class="term-form">
-    <input type="text" id="host" placeholder="10.44.0.5">
+    <input type="text" id="host" value="localhost" autocapitalize="none">
     <input type="text" id="user" placeholder="root" autocapitalize="none">
+    <input type="text" id="port" value="22" title="Port">
+    <input type="password" id="losen" placeholder="{{ t('losen_ph') }}" autocomplete="off">
     <button type="submit">{{ t('anslut_nytt_fonster') }}</button>
-    <input type="hidden" id="port" value="22">
   </form>
 </div>
 
@@ -62,6 +65,7 @@
   const stjarna = (p) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="${p?'currentColor':'none'}" stroke="currentColor" stroke-width="1.6"><path d="M12 2l3 6.9 7.6.6-5.8 5 1.8 7.4L12 18l-6.4 3.9 1.8-7.4-5.8-5 7.6-.6z"/></svg>`;
   const blixt = (p) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="${p?'currentColor':'none'}" stroke="currentColor" stroke-width="1.6"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>`;
   const SOPTUNNA = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>`;
+  const NYCKEL_IK = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="4"/><path d="M11 11l7 7M17 15l2 2M15 17l2 2"/></svg>`;
 
   function nar(ts){
     if(!ts) return '';
@@ -75,8 +79,9 @@
   }
   function oppna(c){
     const l = las(); const t = l.find(x => idFor(x)===idFor(c));
-    if(t){ t.senast = Date.now(); }
-    else { l.push({host:c.host, user:c.user, port:c.port, favorit:false, auto:false, senast:Date.now()}); }
+    if(t){ t.senast = Date.now(); if(c.losen) t.losen = c.losen; }
+    else { l.push({host:c.host, user:c.user, port:c.port, losen:c.losen||'',
+                   favorit:false, auto:false, senast:Date.now()}); }
     spara(l); rita();
     oppnaFonster(c);
   }
@@ -89,13 +94,19 @@
   function radEl(c){
     const rad = document.createElement('div');
     rad.className = 'srow';
+    const harLosen = c.losen ? `<button class="ikon pa losen" title="Sparat lösenord — klicka för att glömma">${NYCKEL_IK}</button>` : '';
     rad.innerHTML = `
       <span class="namn">${idFor(c)}</span>
       <span class="tid">${nar(c.senast)}</span>
+      ${harLosen}
       <button class="ikon blixt ${c.auto?'pa':''}" title="${T_AUTO}">${blixt(c.auto)}</button>
       <button class="ikon stjarna ${c.favorit?'pa':''}" title="${T_FAV}">${stjarna(c.favorit)}</button>
       <button class="ikon bort" title="${T_TA_BORT}">${SOPTUNNA}</button>`;
     rad.querySelector('.namn').onclick = () => oppna(c);
+    if(c.losen) rad.querySelector('.losen').onclick = () => {
+      const l = las(); const t = l.find(x => idFor(x)===idFor(c));
+      if(t){ delete t.losen; spara(l); rita(); }
+    };
     rad.querySelector('.blixt').onclick = () => toggle(c, 'auto');
     rad.querySelector('.stjarna').onclick = () => toggle(c, 'favorit');
     rad.querySelector('.bort').onclick = () => { spara(las().filter(x => idFor(x)!==idFor(c))); rita(); };
@@ -118,9 +129,11 @@
     e.preventDefault();
     const c = {host:document.getElementById('host').value.trim(),
                user:document.getElementById('user').value.trim(),
-               port:(document.getElementById('port').value.trim() || '22')};
+               port:(document.getElementById('port').value.trim() || '22'),
+               losen:document.getElementById('losen').value};
     if(!c.host || !c.user) return;
     oppna(c);
+    document.getElementById('losen').value = '';  // lämna inte kvar i fältet
   });
 
   // Auto-start: öppna auto-markerade anslutningar direkt. Blockeras popup:en

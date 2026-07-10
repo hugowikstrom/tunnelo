@@ -75,6 +75,9 @@ TEXTER = {
         "oppna_auto": "Öppna auto-anslutning",
         "magic_titel": "Logga in på Tunnelo",
         "magic_hjalp": "Klicka på knappen för att slutföra inloggningen.",
+        "losen_ph": "Lösenord (sparas)",
+        "vpn_enheter": "VPN-enheter",
+        "meny": "Meny",
     },
     "en": {
         "tagline": "private VPN — connect your devices",
@@ -138,6 +141,9 @@ TEXTER = {
         "oppna_auto": "Open auto connection",
         "magic_titel": "Log in to Tunnelo",
         "magic_hjalp": "Click the button to complete your login.",
+        "losen_ph": "Password (saved)",
+        "vpn_enheter": "VPN devices",
+        "meny": "Menu",
     },
 }
 

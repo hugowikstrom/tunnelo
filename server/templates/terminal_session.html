@@ -101,8 +101,7 @@ function hanteraInput(d){
   skicka(d);
 }
 
-function anslut(){
-  const losen = document.getElementById('password').value;
+function anslutMed(losen){
   document.getElementById('login').remove();
   document.getElementById('session').style.display = 'flex';
 
@@ -124,11 +123,19 @@ function anslut(){
   term.onData(hanteraInput);
   window.addEventListener('resize', () => fit.fit());
 }
+function anslut(){ anslutMed(document.getElementById('password').value); }
 
 document.getElementById('anslut').addEventListener('click', anslut);
 document.getElementById('password').addEventListener('keydown', (e) => {
   if(e.key === 'Enter') anslut();
 });
+
+// Har vi ett sparat lösenord för den här anslutningen? Logga in direkt.
+(function(){
+  const conns = JSON.parse(localStorage.getItem(NYCKEL) || '[]');
+  const m = conns.find(c => c.user===USER && c.host===HOST && String(c.port)===String(PORT));
+  if(m && m.losen) anslutMed(m.losen);
+})();
 
 // Tangentbordsraden
 document.getElementById('kCtrl').addEventListener('click', () => {

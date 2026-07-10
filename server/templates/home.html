@@ -1,47 +1,11 @@
 {% extends "base.html" %}
-{% block topphoger %}<a class="btn ghost" href="{{ url_for('logout') }}">{{ t('logga_ut') }}</a>{% endblock %}
+{% block topphoger %}
+<div style="display:flex;flex-wrap:wrap;gap:.4rem;justify-content:flex-end">
+  <a class="btn ghost" href="{{ url_for('enheter_sida') }}">{{ t('vpn_enheter') }}</a>
+  {% if is_admin %}<a class="btn ghost" href="{{ url_for('users_sida') }}">{{ t('hantera_anvandare') }}</a>{% endif %}
+  <a class="btn ghost" href="{{ url_for('logout') }}">{{ t('logga_ut') }}</a>
+</div>
+{% endblock %}
 {% block innehall %}
-<div class="card">
-  <h2>{{ t('ny_enhet') }}</h2>
-  <form method="post" action="{{ url_for('skapa_device') }}">
-    <label for="namn">{{ t('enhet_namn_label') }}</label>
-    <input type="text" id="namn" name="namn" placeholder="min-telefon">
-    <button type="submit">{{ t('skapa_qr') }}</button>
-  </form>
-  <p class="muted" style="margin-bottom:0">{{ t('enhet_hjalp') }}</p>
-</div>
-
-<div class="card">
-  <h2>{{ t('enheter') }} ({{ devices|length }})</h2>
-  {% if not devices %}
-    <p class="muted">{{ t('inga_enheter') }}</p>
-  {% endif %}
-  {% for d in devices %}
-  <div class="row">
-    <div>
-      <strong>{{ d.namn }}</strong><br>
-      <span class="ip">{{ d.vpn_ip }}</span>
-    </div>
-    <div style="display:flex;gap:.5rem;align-items:center">
-      <a class="btn" href="{{ url_for('visa_device', device_id=d.id) }}">QR</a>
-      <form method="post" action="{{ url_for('ta_bort_device', device_id=d.id) }}"
-            onsubmit="return confirm('{{ t('ta_bort') }} {{ d.namn }}?')">
-        <button class="btn danger" type="submit">{{ t('ta_bort') }}</button>
-      </form>
-    </div>
-  </div>
-  {% endfor %}
-</div>
-
-{% if is_admin %}
-<div class="card" style="padding:1rem 1.1rem">
-  <a class="btn ghost" href="{{ url_for('users_sida') }}">{{ t('hantera_anvandare') }}</a>
-</div>
-{% endif %}
-
-<h2 style="font-size:1.05rem;margin:1.4rem 0 .8rem">{{ t('ssh_anslutningar') }}</h2>
 {% include '_ssh_sektion.html' %}
-
-<p class="muted">{{ t('servern_nas') }} <span class="ip">{{ endpoint }}</span> ·
-  {{ t('trafik_genom') }}: <span class="ip">{{ allowed }}</span></p>
 {% endblock %}

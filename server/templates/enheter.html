@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block titel %} — {{ t('vpn_enheter') }}{% endblock %}
+{% block undertitel %}{{ t('vpn_enheter') }}{% endblock %}
+{% block topphoger %}<a class="btn ghost" href="{{ url_for('home') }}">{{ t('tillbaka') }}</a>{% endblock %}
+{% block innehall %}
+<div class="card">
+  <h2>{{ t('ny_enhet') }}</h2>
+  <form method="post" action="{{ url_for('skapa_device') }}">
+    <label for="namn">{{ t('enhet_namn_label') }}</label>
+    <input type="text" id="namn" name="namn" placeholder="min-telefon">
+    <button type="submit">{{ t('skapa_qr') }}</button>
+  </form>
+  <p class="muted" style="margin-bottom:0">{{ t('enhet_hjalp') }}</p>
+</div>
+
+<div class="card">
+  <h2>{{ t('enheter') }} ({{ devices|length }})</h2>
+  {% if not devices %}
+    <p class="muted">{{ t('inga_enheter') }}</p>
+  {% endif %}
+  {% for d in devices %}
+  <div class="row">
+    <div>
+      <strong>{{ d.namn }}</strong><br>
+      <span class="ip">{{ d.vpn_ip }}</span>
+    </div>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <a class="btn" href="{{ url_for('visa_device', device_id=d.id) }}">QR</a>
+      <form method="post" action="{{ url_for('ta_bort_device', device_id=d.id) }}"
+            onsubmit="return confirm('{{ t('ta_bort') }} {{ d.namn }}?')">
+        <button class="btn danger" type="submit">{{ t('ta_bort') }}</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<p class="muted">{{ t('servern_nas') }} <span class="ip">{{ endpoint }}</span> ·
+  {{ t('trafik_genom') }}: <span class="ip">{{ allowed }}</span></p>
+{% endblock %}

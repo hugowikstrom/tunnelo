@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block titel %} — {{ device.namn }}{% endblock %}
-{% block topphoger %}<a class="btn ghost" href="{{ url_for('home') }}">{{ t('tillbaka') }}</a>{% endblock %}
+{% block topphoger %}<a class="btn ghost" href="{{ url_for('enheter_sida') }}">{{ t('tillbaka') }}</a>{% endblock %}
 {% block innehall %}
 {# --- SVG-ikoner (currentColor, inga emojis) --- #}
 {% set ic_mobil %}<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>{% endset %}

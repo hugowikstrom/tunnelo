@@ -562,9 +562,15 @@ def ta_bort_user():
 
 @app.route("/")
 def home():
-    return render_template("home.html", devices=load_devices(),
-                           endpoint=endpoint(), allowed=ALLOWED_IPS,
-                           is_admin=ar_admin())
+    """Startsida: SSH-sessioner. VPN-enheter nås via meny (/enheter)."""
+    return render_template("home.html", is_admin=ar_admin())
+
+
+@app.route("/enheter")
+def enheter_sida():
+    """VPN-enheter: skapa och lista (QR/installation). Flyttad från startsidan."""
+    return render_template("enheter.html", devices=load_devices(),
+                           endpoint=endpoint(), allowed=ALLOWED_IPS)
 
 
 @app.route("/devices", methods=["POST"])
@@ -728,7 +734,7 @@ def ta_bort_device(device_id):
         hub.remove_peer(device["pub"])
         devices = [d for d in devices if d["id"] != device_id]
         save_devices(devices)
-    return redirect(url_for("home"))
+    return redirect(url_for("enheter_sida"))
 
 
 # --- Web-terminal (SSH i webbläsaren) ----------------------------------------
