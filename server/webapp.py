@@ -131,6 +131,9 @@ def skicka_resend(till, amne, text):
                                  data=data, method="POST")
     req.add_header("Authorization", f"Bearer {RESEND_KEY}")
     req.add_header("Content-Type", "application/json")
+    # Resend ligger bakom Cloudflare som blockerar Python-urllibs standard-UA
+    # (fel 1010) — sätt en egen User-Agent.
+    req.add_header("User-Agent", "Tunnelo/1.0")
     with urllib.request.urlopen(req, timeout=10) as r:
         r.read()  # 200 = skickat
 
