@@ -475,18 +475,16 @@ def verify():
     return render_template("verify.html", epost=epost, fel=fel)
 
 
-@app.route("/magic/<token>", methods=["GET", "POST"])
+@app.route("/magic/<token>")
 def magic(token):
     """
-    Magic-länk från mailet. GET visar en landningssida med en Logga in-knapp
-    (så att mail-skannrar som "förklickar" länken inte förbrukar den). POST
-    loggar in — skapar admin om det är första gången (setup).
+    Magic-länk från mailet: klick → inloggad direkt (ingen mellansida).
+    Skapar admin om det är första gången (setup). Vid ogiltig/utgången länk
+    visas ett felmeddelande.
     """
-    if request.method == "GET":
-        return render_template("magic.html", token=token, fel=None)
     epost = hitta_magic(token)
     if not epost:
-        return render_template("magic.html", token=token,
+        return render_template("magic.html",
                                fel="Länken är ogiltig eller har gått ut.")
     PENDING.pop(epost, None)
     session.pop("pending_epost", None)
@@ -497,8 +495,7 @@ def magic(token):
         return svara_inloggad(epost, True)
     if epost in las_anvandare():
         return svara_inloggad(epost, las_anvandare()[epost].get("admin", False))
-    return render_template("magic.html", token=token,
-                           fel="Adressen är inte registrerad.")
+    return render_template("magic.html", fel="Adressen är inte registrerad.")
 
 
 @app.route("/logout")

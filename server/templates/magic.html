@@ -1,16 +1,9 @@
 {% extends "base.html" %}
 {% block titel %} — {{ t('magic_titel') }}{% endblock %}
 {% block innehall %}
-<div class="card">
-  <h2>{{ t('magic_titel') }}</h2>
-  {% if fel %}
-    <div class="fel">{{ fel }}</div>
-    <a class="btn ghost" href="{{ url_for('login') }}">{{ t('logga_in') }}</a>
-  {% else %}
-    <p class="muted" style="margin-top:0">{{ t('magic_hjalp') }}</p>
-    <form method="post">
-      <button type="submit">{{ t('logga_in') }}</button>
-    </form>
-  {% endif %}
+<div class="card" style="max-width:340px;margin:1.5rem auto 0">
+  <h2 style="margin-top:0">{{ t('magic_titel') }}</h2>
+  <div class="fel">{{ fel }}</div>
+  <a class="btn" style="width:100%;text-align:center" href="{{ url_for('login') }}">{{ t('logga_in') }}</a>
 </div>
 {% endblock %}
