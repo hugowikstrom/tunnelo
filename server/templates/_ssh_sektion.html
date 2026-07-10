@@ -65,7 +65,22 @@
   const stjarna = (p) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="${p?'currentColor':'none'}" stroke="currentColor" stroke-width="1.6"><path d="M12 2l3 6.9 7.6.6-5.8 5 1.8 7.4L12 18l-6.4 3.9 1.8-7.4-5.8-5 7.6-.6z"/></svg>`;
   const blixt = (p) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="${p?'currentColor':'none'}" stroke="currentColor" stroke-width="1.6"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>`;
   const SOPTUNNA = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>`;
-  const NYCKEL_IK = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="4"/><path d="M11 11l7 7M17 15l2 2M15 17l2 2"/></svg>`;
+  const LAS = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+  const NYCKELSVG = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="17" r="3"/><path d="M9.5 14.5L20 4M16 4h4v4"/></svg>`;
+
+  function installNyckel(c){
+    const pw = prompt(`Lösenord för ${idFor(c)} (engångs — för att lägga in SSH-nyckeln på servern):`);
+    if(!pw) return;
+    fetch('/ssh/setup-key', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({host:c.host, user:c.user, port:c.port, password:pw})})
+      .then(r => r.json()).then(res => {
+        if(res.private_key){
+          const l = las(); const t = l.find(x => idFor(x)===idFor(c));
+          if(t){ t.pkey = res.private_key; delete t.losen; spara(l); rita(); }
+          alert('Klart! Framtida inloggningar sker med nyckel, utan lösenord.');
+        } else { alert('Kunde inte installera nyckel: ' + (res.fel || 'okänt fel')); }
+      }).catch(e => alert('Fel: ' + e));
+  }
 
   function nar(ts){
     if(!ts) return '';
@@ -94,18 +109,27 @@
   function radEl(c){
     const rad = document.createElement('div');
     rad.className = 'srow';
-    const harLosen = c.losen ? `<button class="ikon pa losen" title="Sparat lösenord — klicka för att glömma">${NYCKEL_IK}</button>` : '';
+    const harLosen = (c.losen && !c.pkey) ? `<button class="ikon pa losen" title="Sparat lösenord — klicka för att glömma">${LAS}</button>` : '';
+    const nyckelKnapp = c.pkey
+      ? `<button class="ikon pa nyckel" title="Nyckelinloggning aktiv — klicka för att glömma nyckeln">${NYCKELSVG}</button>`
+      : `<button class="ikon nyckel" title="Installera SSH-nyckel (lösenordsfri inloggning)">${NYCKELSVG}</button>`;
     rad.innerHTML = `
       <span class="namn">${idFor(c)}</span>
       <span class="tid">${nar(c.senast)}</span>
       ${harLosen}
+      ${nyckelKnapp}
       <button class="ikon blixt ${c.auto?'pa':''}" title="${T_AUTO}">${blixt(c.auto)}</button>
       <button class="ikon stjarna ${c.favorit?'pa':''}" title="${T_FAV}">${stjarna(c.favorit)}</button>
       <button class="ikon bort" title="${T_TA_BORT}">${SOPTUNNA}</button>`;
     rad.querySelector('.namn').onclick = () => oppna(c);
-    if(c.losen) rad.querySelector('.losen').onclick = () => {
+    if(c.losen && !c.pkey) rad.querySelector('.losen').onclick = () => {
       const l = las(); const t = l.find(x => idFor(x)===idFor(c));
       if(t){ delete t.losen; spara(l); rita(); }
+    };
+    rad.querySelector('.nyckel').onclick = () => {
+      if(c.pkey){ const l=las(); const t=l.find(x=>idFor(x)===idFor(c));
+                  if(t){ delete t.pkey; spara(l); rita(); } }
+      else installNyckel(c);
     };
     rad.querySelector('.blixt').onclick = () => toggle(c, 'auto');
     rad.querySelector('.stjarna').onclick = () => toggle(c, 'favorit');

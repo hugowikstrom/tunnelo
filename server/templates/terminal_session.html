@@ -101,7 +101,8 @@ function hanteraInput(d){
   skicka(d);
 }
 
-function anslutMed(losen){
+// auth = {password:"..."} ELLER {private_key:"..."}
+function anslutMed(auth){
   document.getElementById('login').remove();
   document.getElementById('session').style.display = 'flex';
 
@@ -114,8 +115,8 @@ function anslutMed(losen){
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   sock = new WebSocket(proto + '://' + location.host + '/terminal/ws');
   sock.onopen = () => {
-    sock.send(JSON.stringify({host:HOST, port:PORT, user:USER, password:losen,
-                              cols:term.cols, rows:term.rows}));
+    sock.send(JSON.stringify(Object.assign(
+      {host:HOST, port:PORT, user:USER, cols:term.cols, rows:term.rows}, auth)));
     term.focus();
   };
   sock.onmessage = (ev) => term.write(ev.data);
@@ -123,18 +124,19 @@ function anslutMed(losen){
   term.onData(hanteraInput);
   window.addEventListener('resize', () => fit.fit());
 }
-function anslut(){ anslutMed(document.getElementById('password').value); }
+function anslut(){ anslutMed({password: document.getElementById('password').value}); }
 
 document.getElementById('anslut').addEventListener('click', anslut);
 document.getElementById('password').addEventListener('keydown', (e) => {
   if(e.key === 'Enter') anslut();
 });
 
-// Har vi ett sparat lösenord för den här anslutningen? Logga in direkt.
+// Sparad nyckel eller lösenord för den här anslutningen? Logga in direkt.
 (function(){
   const conns = JSON.parse(localStorage.getItem(NYCKEL) || '[]');
   const m = conns.find(c => c.user===USER && c.host===HOST && String(c.port)===String(PORT));
-  if(m && m.losen) anslutMed(m.losen);
+  if(m && m.pkey) anslutMed({private_key:m.pkey});
+  else if(m && m.losen) anslutMed({password:m.losen});
 })();
 
 // Tangentbordsraden

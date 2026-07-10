@@ -755,30 +755,42 @@ def terminal_session():
                            port=request.args.get("port", "22"))
 
 
+def oppna_ssh(host, user, port=22, password=None, private_key=None, timeout=10):
+    """Öppna en SSH-anslutning med lösenord ELLER privat nyckel. Återanvänds av
+    terminalen, nyckelinstallationen och filöverföringen."""
+    import io as _io
+
+    import paramiko
+    c = paramiko.SSHClient()
+    c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    pkey = None
+    if private_key:
+        pkey = paramiko.RSAKey.from_private_key(_io.StringIO(private_key))
+    c.connect(host, port=int(port), username=user,
+              password=None if pkey else password, pkey=pkey,
+              timeout=timeout, look_for_keys=False, allow_agent=False)
+    return c
+
+
 @sock.route("/terminal/ws")
 def terminal_ws(ws):
     """
     Websocket som kopplar webbterminalen till en riktig SSH-session via paramiko.
-    Första meddelandet från klienten är JSON: {host, port, user, password, cols, rows}.
-    Sedan skickas tangenttryck som text; SSH-utdata skickas tillbaka.
+    Init-JSON: {host, port, user, password ELLER private_key, cols, rows}.
     Kräver inloggning (samma sessions-cookie som resten av portalen).
     """
     import json
     import select
     import threading
 
-    import paramiko
-
     if not inloggad():
         return  # neka om ej inloggad
 
     init = json.loads(ws.receive())
-    klient = paramiko.SSHClient()
-    klient.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
-        klient.connect(init["host"], port=int(init.get("port", 22)),
-                       username=init["user"], password=init.get("password"),
-                       timeout=10, look_for_keys=False, allow_agent=False)
+        klient = oppna_ssh(init["host"], init["user"], init.get("port", 22),
+                           password=init.get("password"),
+                           private_key=init.get("private_key"))
     except Exception as e:
         ws.send(f"\r\n\x1b[31mAnslutning misslyckades: {e}\x1b[0m\r\n")
         return
@@ -818,6 +830,48 @@ def terminal_ws(ws):
     finally:
         chan.close()
         klient.close()
+
+
+@app.route("/ssh/setup-key", methods=["POST"])
+def ssh_setup_key():
+    """
+    Skapa ett SSH-nyckelpar och installera den publika nyckeln på servern (via en
+    engångs-lösenordsinloggning). Returnerar den privata nyckeln så webbläsaren
+    kan spara den → framtida inloggningar sker utan lösenord.
+    """
+    import io as _io
+
+    import paramiko
+    if not inloggad():
+        return {"fel": "ej inloggad"}, 403
+    d = request.get_json(force=True)
+    host, user = d.get("host"), d.get("user")
+    port, pw = int(d.get("port", 22)), d.get("password")
+    if not (host and user and pw):
+        return {"fel": "host, user och lösenord krävs"}, 400
+
+    # Generera nyckelpar
+    key = paramiko.RSAKey.generate(3072)
+    buf = _io.StringIO()
+    key.write_private_key(buf)
+    priv = buf.getvalue()
+    pub = f"ssh-rsa {key.get_base64()} tunnelo"
+
+    # Logga in med lösenord och lägg publika nyckeln i authorized_keys
+    try:
+        c = oppna_ssh(host, user, port, password=pw)
+        cmd = ("mkdir -p ~/.ssh && chmod 700 ~/.ssh && "
+               f'touch ~/.ssh/authorized_keys && grep -qxF "{pub}" ~/.ssh/authorized_keys '
+               f'|| echo "{pub}" >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys')
+        _in, _out, _err = c.exec_command(cmd)
+        _out.read()
+        fel = _err.read().decode().strip()
+        c.close()
+    except Exception as e:
+        return {"fel": str(e)}, 400
+    if fel:
+        return {"fel": fel}, 400
+    return {"ok": True, "private_key": priv}
 
 
 if __name__ == "__main__":
