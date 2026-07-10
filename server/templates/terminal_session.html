@@ -2,15 +2,13 @@
 <html lang="sv">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>SSH {{ user }}@{{ host }}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <style>
   html,body{margin:0;height:100%;background:#0d1117;color:#e6edf3;
     font-family:system-ui,-apple-system,sans-serif}
-  /* Anslutningsruta (visas först, tas bort efter anslutning) */
-  #login{position:absolute;inset:0;display:flex;align-items:center;
-    justify-content:center}
+  #login{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
   #login .box{background:#161b22;border:1px solid #26303d;border-radius:14px;
     padding:1.6rem;width:min(360px,90vw)}
   #login h1{font-size:1.1rem;margin:0 0 .3rem}
@@ -21,26 +19,31 @@
   button{border:0;border-radius:9px;padding:.7rem 1rem;background:#3fb6ff;
     color:#04121f;font-weight:600;cursor:pointer;font-size:.95rem}
   .muted{color:#8b949e;font-size:.8rem;margin:.8rem 0 0}
-  /* Sessionsvy */
   #session{display:none;height:100%;flex-direction:column}
-  #bar{padding:.5rem .8rem;display:flex;justify-content:space-between;
-    align-items:center;border-bottom:1px solid #26303d;position:relative}
+  #bar{padding:.5rem .8rem;display:flex;justify-content:space-between;align-items:center;
+    border-bottom:1px solid #26303d;position:relative}
   #bar .host{font-family:ui-monospace,monospace;color:#3fb6ff;font-size:.9rem}
   #bar .ghost{background:transparent;border:1px solid #26303d;color:#e6edf3;
     padding:.35rem .7rem;font-weight:500;font-size:.85rem}
-  #meny{position:absolute;right:.8rem;top:2.6rem;background:#161b22;
-    border:1px solid #26303d;border-radius:10px;min-width:220px;padding:.4rem;
-    display:none;z-index:5}
+  #meny{position:absolute;right:.8rem;top:2.6rem;background:#161b22;border:1px solid #26303d;
+    border-radius:10px;min-width:220px;padding:.4rem;display:none;z-index:5}
   #meny .rad{padding:.5rem .6rem;border-radius:7px;cursor:pointer;font-size:.85rem;
     font-family:ui-monospace,monospace;display:flex;justify-content:space-between}
   #meny .rad:hover{background:#0d1117}
   #meny .ny{color:#3fb6ff;font-family:system-ui;border-top:1px solid #26303d;
     margin-top:.3rem;padding-top:.6rem}
-  #term{flex:1}
+  #term{flex:1;min-height:0}
+  /* Anpassad tangentbordsrad för mobil (och desktop) */
+  #tbar{display:flex;gap:.3rem;overflow-x:auto;padding:.4rem .5rem;
+    border-top:1px solid #26303d;background:#0d1117;-webkit-overflow-scrolling:touch}
+  #tbar button{flex:0 0 auto;background:#161b22;border:1px solid #26303d;color:#e6edf3;
+    font-family:ui-monospace,monospace;font-size:.85rem;font-weight:500;
+    padding:.5rem .7rem;min-width:2.4rem;border-radius:8px}
+  #tbar button:active{background:#26303d}
+  #tbar button.pa{background:#3fb6ff;color:#04121f;border-color:#3fb6ff}
 </style>
 </head>
 <body>
-<!-- Steg 1: lösenord -->
 <div id="login">
   <div class="box">
     <h1>Anslut via SSH</h1>
@@ -52,7 +55,6 @@
   </div>
 </div>
 
-<!-- Steg 2: terminal (visas efter anslutning) -->
 <div id="session">
   <div id="bar">
     <span class="host">{{ user }}@{{ host }}:{{ port }}</span>
@@ -60,6 +62,20 @@
     <div id="meny"></div>
   </div>
   <div id="term"></div>
+  <div id="tbar">
+    <button data-seq="\x1b">Esc</button>
+    <button data-seq="\t">Tab</button>
+    <button id="kCtrl">Ctrl</button>
+    <button data-seq="\x1b[A">↑</button>
+    <button data-seq="\x1b[B">↓</button>
+    <button data-seq="\x1b[D">←</button>
+    <button data-seq="\x1b[C">→</button>
+    <button data-seq="\x03">^C</button>
+    <button data-txt="|">|</button>
+    <button data-txt="/">/</button>
+    <button data-txt="~">~</button>
+    <button data-txt="-">-</button>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
@@ -67,42 +83,68 @@
 <script>
 const HOST = {{ host|tojson }}, USER = {{ user|tojson }}, PORT = {{ port|tojson }};
 const NYCKEL = 'tunnelo_ssh';
+let sock = null, term = null, fit = null, ctrlAktiv = false;
+
+function skicka(d){ if(sock && sock.readyState === 1) sock.send(d); if(term) term.focus(); }
+
+// Tolka input från xterm (fysiskt/mobilt tangentbord). Ctrl-modifieraren gör
+// nästa bokstav till en Ctrl-sekvens (t.ex. c -> \x03).
+function hanteraInput(d){
+  if(ctrlAktiv){
+    ctrlAktiv = false;
+    document.getElementById('kCtrl').classList.remove('pa');
+    if(d.length === 1){
+      const k = d.toUpperCase().charCodeAt(0);
+      if(k >= 64 && k <= 95){ skicka(String.fromCharCode(k & 0x1f)); return; }
+    }
+  }
+  skicka(d);
+}
 
 function anslut(){
   const losen = document.getElementById('password').value;
-  // Ta BORT hela lösenrutan ur sidan (ligger inte kvar).
   document.getElementById('login').remove();
   document.getElementById('session').style.display = 'flex';
 
-  const term = new Terminal({fontSize:14, theme:{background:'#0d1117'}});
-  const fit = new FitAddon.FitAddon();
+  term = new Terminal({fontSize:14, theme:{background:'#0d1117'}});
+  fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(document.getElementById('term'));
   fit.fit();
 
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(proto + '://' + location.host + '/terminal/ws');
-  ws.onopen = () => {
-    ws.send(JSON.stringify({host:HOST, port:PORT, user:USER, password:losen,
-                            cols:term.cols, rows:term.rows}));
+  sock = new WebSocket(proto + '://' + location.host + '/terminal/ws');
+  sock.onopen = () => {
+    sock.send(JSON.stringify({host:HOST, port:PORT, user:USER, password:losen,
+                              cols:term.cols, rows:term.rows}));
     term.focus();
   };
-  ws.onmessage = (ev) => term.write(ev.data);
-  ws.onclose = () => term.write('\r\n\x1b[33m[frånkopplad]\x1b[0m\r\n');
-  term.onData((d) => ws.send(d));
+  sock.onmessage = (ev) => term.write(ev.data);
+  sock.onclose = () => term.write('\r\n\x1b[33m[frånkopplad]\x1b[0m\r\n');
+  term.onData(hanteraInput);
   window.addEventListener('resize', () => fit.fit());
 }
 
 document.getElementById('anslut').addEventListener('click', anslut);
 document.getElementById('password').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') anslut();
+  if(e.key === 'Enter') anslut();
 });
 
-// --- "Logga in vidare": lista med sparade anslutningar i baren ---
+// Tangentbordsraden
+document.getElementById('kCtrl').addEventListener('click', () => {
+  ctrlAktiv = !ctrlAktiv;
+  document.getElementById('kCtrl').classList.toggle('pa', ctrlAktiv);
+  if(term) term.focus();
+});
+document.querySelectorAll('#tbar button[data-seq]').forEach(b =>
+  b.addEventListener('click', () => skicka(b.dataset.seq)));
+document.querySelectorAll('#tbar button[data-txt]').forEach(b =>
+  b.addEventListener('click', () => skicka(b.dataset.txt)));
+
+// "Logga in vidare"-meny
 function oppna(c){
   const q = new URLSearchParams({host:c.host, user:c.user, port:c.port});
-  window.open('/terminal/session?' + q.toString(), '_blank',
-              'width=900,height=620,noopener');
+  window.open('/terminal/session?' + q.toString(), '_blank', 'width=900,height=620,noopener');
 }
 function byggMeny(){
   const meny = document.getElementById('meny');
@@ -126,7 +168,7 @@ function byggMeny(){
 document.getElementById('menyknapp').addEventListener('click', () => {
   const meny = document.getElementById('meny');
   const visa = meny.style.display !== 'block';
-  if (visa) byggMeny();
+  if(visa) byggMeny();
   meny.style.display = visa ? 'block' : 'none';
 });
 </script>
