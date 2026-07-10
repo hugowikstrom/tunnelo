@@ -29,6 +29,7 @@ import secrets
 import smtplib
 import socket
 import time
+import urllib.request
 from email.message import EmailMessage
 
 import qrcode
@@ -53,13 +54,18 @@ DEVICES_FIL = os.path.join(HAR, "devices.json")
 # skapas via setup-flödet och blir admin.
 USERS_FIL = os.path.join(HAR, "users.json")
 
-# SMTP för att skicka inloggningskoder. Sätts ingen SMTP_HOST skrivs koden i
-# serverloggen istället (praktiskt vid test/utveckling).
+# Utskick av inloggningskoder. Prioritet: Resend (enklast) → SMTP → serverlogg.
+# Resend: skaffa en API-nyckel på resend.com, sätt TUNNELO_RESEND_KEY.
+RESEND_KEY = os.environ.get("TUNNELO_RESEND_KEY")
 SMTP_HOST = os.environ.get("TUNNELO_SMTP_HOST")
 SMTP_PORT = int(os.environ.get("TUNNELO_SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("TUNNELO_SMTP_USER")
 SMTP_PASS = os.environ.get("TUNNELO_SMTP_PASS")
-SMTP_FROM = os.environ.get("TUNNELO_SMTP_FROM", SMTP_USER or "tunnelo@localhost")
+SMTP_FROM = os.environ.get("TUNNELO_SMTP_FROM", SMTP_USER or "")
+# Avsändaradress. För Resend måste domänen vara verifierad; onboarding@resend.dev
+# funkar för test (går bara till ditt eget konto).
+MAIL_FROM = (os.environ.get("TUNNELO_MAIL_FROM") or SMTP_FROM
+             or "Tunnelo <onboarding@resend.dev>")
 
 KOD_GILTIGHET = 600  # sekunder en inloggningskod gäller (10 min)
 # Väntande koder i minnet: email -> {"kod": "123456", "utgang": <tid>}
@@ -91,15 +97,39 @@ def generera_kod():
 
 
 def skicka_kod(epost, kod):
-    """Maila koden. Utan SMTP_HOST loggas den istället (utvecklingsläge)."""
-    if not SMTP_HOST:
+    """
+    Maila koden. Prioritet: Resend (API) → SMTP → serverlogg (utvecklingsläge).
+    """
+    amne = "Din Tunnelo-inloggningskod"
+    text = f"Din inloggningskod: {kod}\n\nGäller i 10 minuter."
+    if RESEND_KEY:
+        skicka_resend(epost, amne, text)
+    elif SMTP_HOST:
+        skicka_smtp(epost, amne, text)
+    else:
         print(f"[DEV] Inloggningskod för {epost}: {kod}")
-        return
+
+
+def skicka_resend(till, amne, text):
+    """Skicka mejl via Resends API (https://resend.com) — bara en API-nyckel."""
+    data = json.dumps({
+        "from": MAIL_FROM, "to": [till], "subject": amne, "text": text,
+    }).encode()
+    req = urllib.request.Request("https://api.resend.com/emails",
+                                 data=data, method="POST")
+    req.add_header("Authorization", f"Bearer {RESEND_KEY}")
+    req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=10) as r:
+        r.read()  # 200 = skickat
+
+
+def skicka_smtp(till, amne, text):
+    """Skicka mejl via en vanlig SMTP-server."""
     msg = EmailMessage()
-    msg["Subject"] = "Din Tunnelo-inloggningskod"
-    msg["From"] = SMTP_FROM
-    msg["To"] = epost
-    msg.set_content(f"Din inloggningskod: {kod}\n\nGäller i 10 minuter.")
+    msg["Subject"] = amne
+    msg["From"] = MAIL_FROM
+    msg["To"] = till
+    msg.set_content(text)
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
         if SMTP_PORT in (587, 25):
             s.starttls()
