@@ -71,6 +71,8 @@ TEXTER = {
         "inga_favoriter": "Inga favoriter än — stjärnmärk en anslutning nedan.",
         "ingen_historik": "Ingen historik än — anslut ovan.",
         "host_anv": "Host / användare",
+        "auto_start": "Starta automatiskt vid inloggning",
+        "oppna_auto": "Öppna auto-anslutning",
     },
     "en": {
         "tagline": "private VPN — connect your devices",
@@ -130,6 +132,8 @@ TEXTER = {
         "inga_favoriter": "No favorites yet — star a connection below.",
         "ingen_historik": "No history yet — connect above.",
         "host_anv": "Host / user",
+        "auto_start": "Start automatically at login",
+        "oppna_auto": "Open auto connection",
     },
 }
 
