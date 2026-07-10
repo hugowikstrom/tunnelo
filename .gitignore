@@ -19,3 +19,5 @@ __pycache__/
 *.conf
 
 server/.env
+
+server/*.log

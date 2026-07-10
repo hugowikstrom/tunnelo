@@ -32,15 +32,8 @@ import time
 import urllib.request
 from email.message import EmailMessage
 
-import qrcode
-import qrcode.image.svg
-from flask import (Flask, Response, redirect, render_template, request,
-                   session, url_for)
-from flask_sock import Sock
-
-import hub
-
-# Ladda hemligheter från server/.env (KEY=VALUE per rad) om filen finns.
+# Ladda hemligheter/inställningar från server/.env (KEY=VALUE per rad) om filen
+# finns — MÅSTE ske före "import hub" som läser TUNNELO_HUB_PORT vid import.
 # Riktiga miljövariabler vinner (setdefault skriver bara om de saknas).
 _envfil = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 if os.path.exists(_envfil):
@@ -50,6 +43,14 @@ if os.path.exists(_envfil):
             if _rad and not _rad.startswith("#") and "=" in _rad:
                 _k, _v = _rad.split("=", 1)
                 os.environ.setdefault(_k.strip(), _v.strip())
+
+import qrcode
+import qrcode.image.svg
+from flask import (Flask, Response, redirect, render_template, request,
+                   session, url_for)
+from flask_sock import Sock
+
+import hub
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # för sessions-cookien
