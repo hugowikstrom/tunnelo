@@ -49,8 +49,9 @@ ALLOWED_IPS = os.environ.get("TUNNELO_ALLOWED", hub.NET_CIDR)
 
 HAR = os.path.dirname(os.path.abspath(__file__))
 DEVICES_FIL = os.path.join(HAR, "devices.json")
-# Fil med tillåtna mailadresser (en per rad) — bara dessa får logga in.
-EPOST_FIL = os.path.join(HAR, "allowed_emails.txt")
+# Användare (mailadress + roll). Bara dessa får logga in. Första användaren
+# skapas via setup-flödet och blir admin.
+USERS_FIL = os.path.join(HAR, "users.json")
 
 # SMTP för att skicka inloggningskoder. Sätts ingen SMTP_HOST skrivs koden i
 # serverloggen istället (praktiskt vid test/utveckling).
@@ -65,15 +66,23 @@ KOD_GILTIGHET = 600  # sekunder en inloggningskod gäller (10 min)
 PENDING = {}
 
 
-def las_tillatna_epost():
-    """Läs tillåtna mailadresser från fil (små bokstäver, utan blanktecken)."""
-    if not os.path.exists(EPOST_FIL):
-        return set()
-    with open(EPOST_FIL) as f:
-        return {
-            rad.strip().lower() for rad in f
-            if rad.strip() and not rad.startswith("#")
-        }
+def las_anvandare():
+    """Läs användarna som en dict: epost -> {"epost", "admin"}."""
+    if not os.path.exists(USERS_FIL):
+        return {}
+    with open(USERS_FIL) as f:
+        return {u["epost"]: u for u in json.load(f)}
+
+
+def spara_anvandare(users):
+    """Spara användar-dicten till disk."""
+    with open(USERS_FIL, "w") as f:
+        json.dump(list(users.values()), f, indent=2)
+
+
+def finns_admin():
+    """True om minst en admin är registrerad (annars behövs setup)."""
+    return any(u.get("admin") for u in las_anvandare().values())
 
 
 def generera_kod():
@@ -171,27 +180,92 @@ def inloggad():
     return session.get("inloggad") is True
 
 
+def ar_admin():
+    return session.get("admin") is True
+
+
+def skicka_ny_kod(epost):
+    """Skapa och maila en engångskod, kom ihåg vilken adress som väntar."""
+    kod = generera_kod()
+    PENDING[epost] = {"kod": kod, "utgang": time.time() + KOD_GILTIGHET}
+    skicka_kod(epost, kod)
+    session["pending_epost"] = epost
+
+
+def kolla_kod(epost, angiven):
+    """True om koden stämmer och inte gått ut. Förbrukar koden."""
+    post = PENDING.get(epost)
+    if post and time.time() < post["utgang"] and angiven == post["kod"]:
+        PENDING.pop(epost, None)
+        session.pop("pending_epost", None)
+        return True
+    return False
+
+
 @app.before_request
 def krav_login():
-    """Kräv inloggning för allt utom login/verifiering och statiska filer."""
-    if request.endpoint in ("login", "verify", "static"):
+    """Bootstrap till setup om ingen admin finns; annars kräv inloggning."""
+    if request.endpoint == "static":
+        return
+    # Första gången: ingen admin finns → tvinga setup-flödet.
+    if not finns_admin():
+        if request.endpoint not in ("setup", "setup_verify"):
+            return redirect(url_for("setup"))
+        return
+    # Normalt läge: inloggning/verifiering är öppna, resten kräver inloggning.
+    if request.endpoint in ("login", "verify", "setup", "setup_verify"):
         return
     if not inloggad():
         return redirect(url_for("login"))
 
 
-# --- Vyer ---------------------------------------------------------------------
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    """Steg 1: mata in mailadress. Finns den i listan mailas en kod."""
+# --- Setup (första gången: skapa admin) --------------------------------------
+@app.route("/setup", methods=["GET", "POST"])
+def setup():
+    """Första start: ange admin-mailadress → kod mailas."""
+    if finns_admin():
+        return redirect(url_for("login"))
     fel = None
     if request.method == "POST":
         epost = request.form.get("epost", "").strip().lower()
-        if epost in las_tillatna_epost():
-            kod = generera_kod()
-            PENDING[epost] = {"kod": kod, "utgang": time.time() + KOD_GILTIGHET}
-            skicka_kod(epost, kod)
-            session["pending_epost"] = epost
+        if "@" in epost:
+            skicka_ny_kod(epost)
+            return redirect(url_for("setup_verify"))
+        fel = "Ange en giltig mailadress."
+    return render_template("setup.html", fel=fel)
+
+
+@app.route("/setup/verify", methods=["GET", "POST"])
+def setup_verify():
+    """Verifiera admin-adressen och spara den som första användaren (admin)."""
+    if finns_admin():
+        return redirect(url_for("login"))
+    epost = session.get("pending_epost")
+    if not epost:
+        return redirect(url_for("setup"))
+    fel = None
+    if request.method == "POST":
+        if kolla_kod(epost, request.form.get("kod", "").strip()):
+            users = las_anvandare()
+            users[epost] = {"epost": epost, "admin": True}
+            spara_anvandare(users)
+            session["inloggad"] = True
+            session["epost"] = epost
+            session["admin"] = True
+            return redirect(url_for("home"))
+        fel = "Fel eller utgången kod."
+    return render_template("verify.html", epost=epost, fel=fel, setup=True)
+
+
+# --- Inloggning --------------------------------------------------------------
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """Steg 1: mata in mailadress. Finns den som användare mailas en kod."""
+    fel = None
+    if request.method == "POST":
+        epost = request.form.get("epost", "").strip().lower()
+        if epost in las_anvandare():
+            skicka_ny_kod(epost)
             return redirect(url_for("verify"))
         fel = "Adressen är inte registrerad i tvåstegsverifieringen."
     return render_template("login.html", fel=fel)
@@ -205,13 +279,10 @@ def verify():
         return redirect(url_for("login"))
     fel = None
     if request.method == "POST":
-        post = PENDING.get(epost)
-        angiven = request.form.get("kod", "").strip()
-        if post and time.time() < post["utgang"] and angiven == post["kod"]:
-            PENDING.pop(epost, None)
-            session.pop("pending_epost", None)
+        if kolla_kod(epost, request.form.get("kod", "").strip()):
             session["inloggad"] = True
             session["epost"] = epost
+            session["admin"] = las_anvandare().get(epost, {}).get("admin", False)
             return redirect(url_for("home"))
         fel = "Fel eller utgången kod."
     return render_template("verify.html", epost=epost, fel=fel)
@@ -223,10 +294,46 @@ def logout():
     return redirect(url_for("login"))
 
 
+# --- Användarhantering (endast admin) ----------------------------------------
+@app.route("/users")
+def users_sida():
+    if not ar_admin():
+        return redirect(url_for("home"))
+    return render_template("users.html", users=list(las_anvandare().values()),
+                           jag=session.get("epost"))
+
+
+@app.route("/users", methods=["POST"])
+def skapa_user():
+    if not ar_admin():
+        return redirect(url_for("home"))
+    epost = request.form.get("epost", "").strip().lower()
+    if "@" in epost:
+        users = las_anvandare()
+        if epost not in users:
+            users[epost] = {"epost": epost, "admin": False}
+            spara_anvandare(users)
+    return redirect(url_for("users_sida"))
+
+
+@app.route("/users/delete", methods=["POST"])
+def ta_bort_user():
+    if not ar_admin():
+        return redirect(url_for("home"))
+    epost = request.form.get("epost", "").strip().lower()
+    users = las_anvandare()
+    # Skydda admins och en själv från borttagning.
+    if epost in users and not users[epost].get("admin"):
+        users.pop(epost)
+        spara_anvandare(users)
+    return redirect(url_for("users_sida"))
+
+
 @app.route("/")
 def home():
     return render_template("home.html", devices=load_devices(),
-                           endpoint=endpoint(), allowed=ALLOWED_IPS)
+                           endpoint=endpoint(), allowed=ALLOWED_IPS,
+                           is_admin=ar_admin())
 
 
 @app.route("/devices", methods=["POST"])

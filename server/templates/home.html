@@ -39,6 +39,7 @@
 <div class="card">
   <h2>Verktyg</h2>
   <a class="btn" href="{{ url_for('terminal') }}">Öppna SSH-terminal</a>
+  {% if is_admin %}<a class="btn ghost" href="{{ url_for('users_sida') }}">Hantera användare</a>{% endif %}
   <p class="muted" style="margin:.8rem 0 0">Öppna en terminal i webbläsaren mot
     servern eller en maskin på VPN-nätet — funkar även på mobilen.</p>
 </div>

@@ -35,9 +35,6 @@ cd server
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Ange tillåtna inloggningsadresser:
-cp allowed_emails.example.txt allowed_emails.txt   # redigera in dina adresser
-
 # Flask kör som root (behövs för wg-kommandon):
 sudo -E env \
   TUNNELO_ENDPOINT="tunnelo.nattviken.com" \
@@ -50,15 +47,18 @@ sudo -E env \
 > att mailas — praktiskt vid test.
 
 **Caddy** står redan framför på `tunnelo.nattviken.com` (i `/etc/caddy/Caddyfile`)
-och proxar till Flask på 8090 med automatisk HTTPS. Öppna
-`https://tunnelo.nattviken.com`, logga in med din mailadress, ange koden, klicka
-**Ny enhet**, scanna QR:en.
+och proxar till Flask på 8090 med automatisk HTTPS.
 
-### Inloggning (email-tvåstegsverifiering)
-1. Du anger din mailadress.
-2. Finns den i `server/allowed_emails.txt` mailas en 6-siffrig engångskod
-   (annars: *"Adressen är inte registrerad i tvåstegsverifieringen"*).
-3. Du anger koden → inloggad. Koden gäller i 10 minuter och kan bara användas en gång.
+### Första start & inloggning (email-tvåstegsverifiering)
+1. **Första gången** portalen startas finns ingen användare → du skickas till en
+   *setup-sida* som frågar efter **admin-mailadressen**. En kod mailas; ange den
+   så skapas admin och du loggas in.
+2. **Admin** kan sedan gå till *Hantera användare* och lägga till fler mailadresser.
+3. **Inloggning** för alla: ange mailadress → en 6-siffrig engångskod mailas (gäller
+   10 min, engångs) → ange koden. Adresser som inte är registrerade får:
+   *"Adressen är inte registrerad i tvåstegsverifieringen"*.
+
+Användarna sparas i `server/users.json` (gitignorad).
 
 ### Miljövariabler (webapp)
 | Variabel | Default | Betydelse |

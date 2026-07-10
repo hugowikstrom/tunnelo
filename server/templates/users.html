@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block titel %} — användare{% endblock %}
+{% block topphoger %}<a class="btn ghost" href="{{ url_for('home') }}">← Tillbaka</a>{% endblock %}
+{% block innehall %}
+<div class="card">
+  <h2>Lägg till användare</h2>
+  <form method="post" action="{{ url_for('skapa_user') }}">
+    <label for="epost">Mailadress</label>
+    <input type="text" id="epost" name="epost" autocapitalize="none"
+           inputmode="email" placeholder="ny.anvandare@exempel.se">
+    <button type="submit">Lägg till</button>
+  </form>
+  <p class="muted" style="margin-bottom:0">Användaren kan sedan logga in med sin
+    mailadress och en engångskod.</p>
+</div>
+
+<div class="card">
+  <h2>Användare ({{ users|length }})</h2>
+  {% for u in users %}
+  <div class="row">
+    <div>
+      <strong>{{ u.epost }}</strong>
+      {% if u.admin %}<span class="ip"> · admin</span>{% endif %}
+    </div>
+    <div>
+      {% if u.admin %}
+        <span class="muted">skyddad</span>
+      {% else %}
+        <form method="post" action="{{ url_for('ta_bort_user') }}"
+              onsubmit="return confirm('Ta bort {{ u.epost }}?')">
+          <input type="hidden" name="epost" value="{{ u.epost }}">
+          <button class="btn danger" type="submit">Ta bort</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

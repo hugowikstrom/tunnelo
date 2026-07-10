@@ -2,7 +2,7 @@
 {% block titel %} — verifiera{% endblock %}
 {% block innehall %}
 <div class="card">
-  <h2>Ange kod</h2>
+  <h2>{% if setup %}Verifiera administratör{% else %}Ange kod{% endif %}</h2>
   <p class="muted" style="margin-top:0">Vi mailade en engångskod till
     <strong>{{ epost }}</strong>.</p>
   {% if fel %}<div class="fel">{{ fel }}</div>{% endif %}
