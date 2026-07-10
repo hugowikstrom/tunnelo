@@ -66,6 +66,11 @@ TEXTER = {
         "anslut_nytt_fonster": "Anslut (nytt fönster)",
         "sparade_anslutningar": "Sparade anslutningar",
         "inga_sparade": "Inga sparade än — anslut ovan så frågar vi om du vill spara.",
+        "favoriter": "Favoriter",
+        "senaste_ssh": "Senaste inloggningar",
+        "inga_favoriter": "Inga favoriter än — stjärnmärk en anslutning nedan.",
+        "ingen_historik": "Ingen historik än — anslut ovan.",
+        "host_anv": "Host / användare",
     },
     "en": {
         "tagline": "private VPN — connect your devices",
@@ -120,6 +125,11 @@ TEXTER = {
         "anslut_nytt_fonster": "Connect (new window)",
         "sparade_anslutningar": "Saved connections",
         "inga_sparade": "None saved yet — connect above and we'll ask if you want to save it.",
+        "favoriter": "Favorites",
+        "senaste_ssh": "Recent logins",
+        "inga_favoriter": "No favorites yet — star a connection below.",
+        "ingen_historik": "No history yet — connect above.",
+        "host_anv": "Host / user",
     },
 }
 
