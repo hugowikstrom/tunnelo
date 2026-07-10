@@ -8,30 +8,72 @@
 <style>
   html,body{margin:0;height:100%;background:#0d1117;color:#e6edf3;
     font-family:system-ui,-apple-system,sans-serif}
-  #topp{padding:.6rem .8rem;display:flex;gap:.6rem;align-items:center;
-    border-bottom:1px solid #26303d}
-  #topp strong{font-family:ui-monospace,monospace;color:#3fb6ff}
-  input{padding:.5rem .6rem;border:1px solid #26303d;border-radius:8px;
-    background:#161b22;color:#e6edf3;font-size:16px}
-  button{padding:.5rem .9rem;border:0;border-radius:8px;background:#3fb6ff;
-    color:#04121f;font-weight:600;cursor:pointer}
-  #term{height:calc(100% - 52px)}
+  /* Anslutningsruta (visas först, tas bort efter anslutning) */
+  #login{position:absolute;inset:0;display:flex;align-items:center;
+    justify-content:center}
+  #login .box{background:#161b22;border:1px solid #26303d;border-radius:14px;
+    padding:1.6rem;width:min(360px,90vw)}
+  #login h1{font-size:1.1rem;margin:0 0 .3rem}
+  #login .mono{font-family:ui-monospace,monospace;color:#3fb6ff}
+  label{display:block;font-size:.85rem;color:#8b949e;margin:1rem 0 .3rem}
+  input{width:100%;box-sizing:border-box;padding:.7rem .8rem;border:1px solid #26303d;
+    border-radius:9px;background:#0d1117;color:#e6edf3;font-size:16px}
+  button{border:0;border-radius:9px;padding:.7rem 1rem;background:#3fb6ff;
+    color:#04121f;font-weight:600;cursor:pointer;font-size:.95rem}
+  .muted{color:#8b949e;font-size:.8rem;margin:.8rem 0 0}
+  /* Sessionsvy */
+  #session{display:none;height:100%;flex-direction:column}
+  #bar{padding:.5rem .8rem;display:flex;justify-content:space-between;
+    align-items:center;border-bottom:1px solid #26303d;position:relative}
+  #bar .host{font-family:ui-monospace,monospace;color:#3fb6ff;font-size:.9rem}
+  #bar .ghost{background:transparent;border:1px solid #26303d;color:#e6edf3;
+    padding:.35rem .7rem;font-weight:500;font-size:.85rem}
+  #meny{position:absolute;right:.8rem;top:2.6rem;background:#161b22;
+    border:1px solid #26303d;border-radius:10px;min-width:220px;padding:.4rem;
+    display:none;z-index:5}
+  #meny .rad{padding:.5rem .6rem;border-radius:7px;cursor:pointer;font-size:.85rem;
+    font-family:ui-monospace,monospace;display:flex;justify-content:space-between}
+  #meny .rad:hover{background:#0d1117}
+  #meny .ny{color:#3fb6ff;font-family:system-ui;border-top:1px solid #26303d;
+    margin-top:.3rem;padding-top:.6rem}
+  #term{flex:1}
 </style>
 </head>
 <body>
-<div id="topp">
-  <span>SSH <strong>{{ user }}@{{ host }}:{{ port }}</strong></span>
-  <input type="password" id="password" placeholder="Lösenord" autofocus>
-  <button id="anslut">Anslut</button>
+<!-- Steg 1: lösenord -->
+<div id="login">
+  <div class="box">
+    <h1>Anslut via SSH</h1>
+    <div class="mono">{{ user }}@{{ host }}:{{ port }}</div>
+    <label for="password">Lösenord</label>
+    <input type="password" id="password" autofocus>
+    <div style="margin-top:1rem"><button id="anslut">Anslut</button></div>
+    <p class="muted">Lösenordet skickas direkt till servern och sparas aldrig.</p>
+  </div>
 </div>
-<div id="term"></div>
+
+<!-- Steg 2: terminal (visas efter anslutning) -->
+<div id="session">
+  <div id="bar">
+    <span class="host">{{ user }}@{{ host }}:{{ port }}</span>
+    <button class="ghost" id="menyknapp">Anslutningar ▾</button>
+    <div id="meny"></div>
+  </div>
+  <div id="term"></div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script>
 const HOST = {{ host|tojson }}, USER = {{ user|tojson }}, PORT = {{ port|tojson }};
+const NYCKEL = 'tunnelo_ssh';
 
-function start(){
+function anslut(){
+  const losen = document.getElementById('password').value;
+  // Ta BORT hela lösenrutan ur sidan (ligger inte kvar).
+  document.getElementById('login').remove();
+  document.getElementById('session').style.display = 'flex';
+
   const term = new Terminal({fontSize:14, theme:{background:'#0d1117'}});
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
@@ -41,11 +83,8 @@ function start(){
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(proto + '://' + location.host + '/terminal/ws');
   ws.onopen = () => {
-    ws.send(JSON.stringify({
-      host:HOST, port:PORT, user:USER,
-      password: document.getElementById('password').value,
-      cols: term.cols, rows: term.rows
-    }));
+    ws.send(JSON.stringify({host:HOST, port:PORT, user:USER, password:losen,
+                            cols:term.cols, rows:term.rows}));
     term.focus();
   };
   ws.onmessage = (ev) => term.write(ev.data);
@@ -54,14 +93,40 @@ function start(){
   window.addEventListener('resize', () => fit.fit());
 }
 
-document.getElementById('anslut').addEventListener('click', function(){
-  document.getElementById('topp').querySelector('input').disabled = true;
-  this.disabled = true;
-  start();
-});
-// Enter i lösenfältet ansluter
+document.getElementById('anslut').addEventListener('click', anslut);
 document.getElementById('password').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('anslut').click();
+  if (e.key === 'Enter') anslut();
+});
+
+// --- "Logga in vidare": lista med sparade anslutningar i baren ---
+function oppna(c){
+  const q = new URLSearchParams({host:c.host, user:c.user, port:c.port});
+  window.open('/terminal/session?' + q.toString(), '_blank',
+              'width=900,height=620,noopener');
+}
+function byggMeny(){
+  const meny = document.getElementById('meny');
+  const conns = JSON.parse(localStorage.getItem(NYCKEL) || '[]')
+    .sort((a,b) => (b.favorit?1:0)-(a.favorit?1:0));
+  meny.innerHTML = '';
+  conns.forEach(c => {
+    const r = document.createElement('div');
+    r.className = 'rad';
+    r.innerHTML = `<span>${c.user}@${c.host}:${c.port}</span><span>${c.favorit?'★':''}</span>`;
+    r.onclick = () => { oppna(c); meny.style.display='none'; };
+    meny.appendChild(r);
+  });
+  const ny = document.createElement('div');
+  ny.className = 'rad ny';
+  ny.textContent = '+ Ny anslutning…';
+  ny.onclick = () => window.open('/terminal', '_blank');
+  meny.appendChild(ny);
+}
+document.getElementById('menyknapp').addEventListener('click', () => {
+  const meny = document.getElementById('meny');
+  const visa = meny.style.display !== 'block';
+  if (visa) byggMeny();
+  meny.style.display = visa ? 'block' : 'none';
 });
 </script>
 </body>

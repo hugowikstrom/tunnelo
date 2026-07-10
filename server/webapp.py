@@ -71,6 +71,8 @@ else:
 # "Betrodd enhet": sessionen (cookien) gäller i 30 dagar, så en igenkänd
 # webbläsare loggas in direkt utan ny kod.
 app.permanent_session_lifetime = timedelta(days=30)
+# Ladda om mallar från disk vid ändring (slipper starta om servern).
+app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 sock = Sock(app)  # websockets för web-terminalen
 
