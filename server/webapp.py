@@ -874,6 +874,75 @@ def ssh_setup_key():
     return {"ok": True, "private_key": priv}
 
 
+# --- SFTP-filöverföring ------------------------------------------------------
+def _sftp(d):
+    """Öppna SSH+SFTP från en request-dict (lösenord eller private_key)."""
+    c = oppna_ssh(d.get("host"), d.get("user"), d.get("port", 22),
+                  password=d.get("password") or None,
+                  private_key=d.get("private_key") or None)
+    return c, c.open_sftp()
+
+
+@app.route("/sftp/list", methods=["POST"])
+def sftp_list():
+    """Lista en katalog på fjärrservern. path='.' → hemkatalogen."""
+    import stat as _stat
+    if not inloggad():
+        return {"fel": "ej inloggad"}, 403
+    d = request.get_json(force=True)
+    try:
+        c, sftp = _sftp(d)
+        path = d.get("path") or "."
+        path = sftp.normalize(path)  # gör absolut (t.ex. hemkatalogen)
+        poster = [{"namn": a.filename, "dir": _stat.S_ISDIR(a.st_mode),
+                   "storlek": a.st_size} for a in sftp.listdir_attr(path)]
+        c.close()
+        poster.sort(key=lambda x: (not x["dir"], x["namn"].lower()))
+        return {"path": path, "poster": poster}
+    except Exception as e:
+        return {"fel": str(e)}, 400
+
+
+@app.route("/sftp/download", methods=["POST"])
+def sftp_download():
+    """Ladda ner en fil från fjärrservern."""
+    import io as _io
+    if not inloggad():
+        return "", 403
+    d = request.get_json(force=True)
+    try:
+        c, sftp = _sftp(d)
+        buf = _io.BytesIO()
+        sftp.getfo(d["path"], buf)
+        c.close()
+        buf.seek(0)
+        namn = d["path"].rstrip("/").rsplit("/", 1)[-1]
+        return Response(buf.read(), mimetype="application/octet-stream",
+                        headers={"Content-Disposition": f'attachment; filename="{namn}"'})
+    except Exception as e:
+        return str(e), 400
+
+
+@app.route("/sftp/upload", methods=["POST"])
+def sftp_upload():
+    """Ladda upp en fil till en katalog på fjärrservern (drag-and-drop)."""
+    if not inloggad():
+        return {"fel": "ej inloggad"}, 403
+    d = request.form
+    f = request.files.get("fil")
+    if not f:
+        return {"fel": "ingen fil"}, 400
+    try:
+        c, sftp = _sftp(d)
+        path = sftp.normalize(d.get("path") or ".")
+        mal = path.rstrip("/") + "/" + f.filename
+        sftp.putfo(f.stream, mal)
+        c.close()
+        return {"ok": True, "namn": f.filename}
+    except Exception as e:
+        return {"fel": str(e)}, 400
+
+
 if __name__ == "__main__":
     hub.ensure_hub()  # se till att navet finns vid start
     print(f"Tunnelo-portal på http://0.0.0.0:{WEBPORT}  (endpoint {endpoint()})")

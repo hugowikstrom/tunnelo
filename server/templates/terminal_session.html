@@ -16,31 +16,46 @@
   label{display:block;font-size:.85rem;color:#8b949e;margin:1rem 0 .3rem}
   input{width:100%;box-sizing:border-box;padding:.7rem .8rem;border:1px solid #26303d;
     border-radius:9px;background:#0d1117;color:#e6edf3;font-size:16px}
+  .muted{color:#8b949e;font-size:.8rem;margin:.8rem 0 0}
   button{border:0;border-radius:9px;padding:.7rem 1rem;background:#3fb6ff;
     color:#04121f;font-weight:600;cursor:pointer;font-size:.95rem}
-  .muted{color:#8b949e;font-size:.8rem;margin:.8rem 0 0}
   #session{display:none;height:100%;flex-direction:column}
-  #bar{padding:.5rem .8rem;display:flex;justify-content:space-between;align-items:center;
+  #bar{padding:.5rem .8rem;display:flex;gap:.5rem;align-items:center;
     border-bottom:1px solid #26303d;position:relative}
-  #bar .host{font-family:ui-monospace,monospace;color:#3fb6ff;font-size:.9rem}
+  #bar .host{font-family:ui-monospace,monospace;color:#3fb6ff;font-size:.9rem;flex:1}
   #bar .ghost{background:transparent;border:1px solid #26303d;color:#e6edf3;
     padding:.35rem .7rem;font-weight:500;font-size:.85rem}
+  #bar .ghost.pa{background:#3fb6ff;color:#04121f;border-color:#3fb6ff}
   #meny{position:absolute;right:.8rem;top:2.6rem;background:#161b22;border:1px solid #26303d;
     border-radius:10px;min-width:220px;padding:.4rem;display:none;z-index:5}
   #meny .rad{padding:.5rem .6rem;border-radius:7px;cursor:pointer;font-size:.85rem;
     font-family:ui-monospace,monospace;display:flex;justify-content:space-between}
   #meny .rad:hover{background:#0d1117}
-  #meny .ny{color:#3fb6ff;font-family:system-ui;border-top:1px solid #26303d;
-    margin-top:.3rem;padding-top:.6rem}
-  #term{flex:1;min-height:0}
-  /* Anpassad tangentbordsrad för mobil (och desktop) */
+  #meny .ny{color:#3fb6ff;font-family:system-ui;border-top:1px solid #26303d;margin-top:.3rem;padding-top:.6rem}
+  #mitt{flex:1;min-height:0;position:relative}
+  #term{position:absolute;inset:0}
   #tbar{display:flex;gap:.3rem;overflow-x:auto;padding:.4rem .5rem;
-    border-top:1px solid #26303d;background:#0d1117;-webkit-overflow-scrolling:touch}
+    border-top:1px solid #26303d;background:#0d1117}
   #tbar button{flex:0 0 auto;background:#161b22;border:1px solid #26303d;color:#e6edf3;
-    font-family:ui-monospace,monospace;font-size:.85rem;font-weight:500;
-    padding:.5rem .7rem;min-width:2.4rem;border-radius:8px}
-  #tbar button:active{background:#26303d}
+    font-family:ui-monospace,monospace;font-size:.85rem;padding:.5rem .7rem;min-width:2.4rem;border-radius:8px}
   #tbar button.pa{background:#3fb6ff;color:#04121f;border-color:#3fb6ff}
+  /* Filpanel (dubbelpanel: lokal | fjärr) */
+  #filpanel{position:absolute;inset:0;background:#0d1117;display:none;
+    grid-template-columns:1fr 1fr;gap:1px;background:#26303d}
+  .fp{background:#0d1117;display:flex;flex-direction:column;min-height:0}
+  .fp h3{margin:0;padding:.6rem .8rem;font-size:.85rem;border-bottom:1px solid #26303d;
+    display:flex;justify-content:space-between;align-items:center;gap:.5rem}
+  .fp .vag{font-family:ui-monospace,monospace;color:#8b949e;font-size:.72rem;
+    padding:.3rem .8rem;border-bottom:1px solid #26303d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fp .lista{flex:1;overflow:auto}
+  .fp .fil{display:flex;align-items:center;gap:.5rem;padding:.4rem .8rem;cursor:pointer;font-size:.85rem;
+    font-family:ui-monospace,monospace;border-bottom:1px solid #161b22}
+  .fp .fil:hover{background:#161b22}
+  .fp .fil .sz{margin-left:auto;color:#8b949e;font-size:.72rem}
+  .fp .verktyg{display:flex;gap:.4rem;padding:.5rem .8rem;border-top:1px solid #26303d;flex-wrap:wrap}
+  .fp .verktyg button{padding:.4rem .7rem;font-size:.8rem;background:#161b22;border:1px solid #26303d;color:#e6edf3}
+  .fp.drop{outline:2px dashed #3fb6ff;outline-offset:-6px}
+  @media(max-width:640px){ #filpanel{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -58,10 +73,27 @@
 <div id="session">
   <div id="bar">
     <span class="host">{{ user }}@{{ host }}:{{ port }}</span>
+    <button class="ghost" id="filknapp">Filer</button>
     <button class="ghost" id="menyknapp">Anslutningar ▾</button>
     <div id="meny"></div>
   </div>
-  <div id="term"></div>
+  <div id="mitt">
+    <div id="term"></div>
+    <div id="filpanel">
+      <div class="fp" id="fpLokal">
+        <h3>Lokalt <button class="ghost" id="valjMapp" style="font-size:.75rem;padding:.25rem .5rem">Välj mapp</button></h3>
+        <div class="vag" id="lokalVag">— ingen mapp vald —</div>
+        <div class="lista" id="lokalLista"></div>
+        <div class="verktyg"><button id="syncUpp">Sync → server</button></div>
+      </div>
+      <div class="fp" id="fpFjarr">
+        <h3>Server ({{ host }})</h3>
+        <div class="vag" id="fjarrVag">~</div>
+        <div class="lista" id="fjarrLista"></div>
+        <div class="verktyg"><button id="syncNer">Sync ← server</button></div>
+      </div>
+    </div>
+  </div>
   <div id="tbar">
     <button data-seq="\x1b">Esc</button>
     <button data-seq="\t">Tab</button>
@@ -83,55 +115,37 @@
 <script>
 const HOST = {{ host|tojson }}, USER = {{ user|tojson }}, PORT = {{ port|tojson }};
 const NYCKEL = 'tunnelo_ssh';
-let sock = null, term = null, fit = null, ctrlAktiv = false;
+let sock = null, term = null, fit = null, ctrlAktiv = false, aktivtAuth = null;
 
 function skicka(d){ if(sock && sock.readyState === 1) sock.send(d); if(term) term.focus(); }
-
-// Tolka input från xterm (fysiskt/mobilt tangentbord). Ctrl-modifieraren gör
-// nästa bokstav till en Ctrl-sekvens (t.ex. c -> \x03).
 function hanteraInput(d){
   if(ctrlAktiv){
-    ctrlAktiv = false;
-    document.getElementById('kCtrl').classList.remove('pa');
-    if(d.length === 1){
-      const k = d.toUpperCase().charCodeAt(0);
-      if(k >= 64 && k <= 95){ skicka(String.fromCharCode(k & 0x1f)); return; }
-    }
+    ctrlAktiv = false; document.getElementById('kCtrl').classList.remove('pa');
+    if(d.length === 1){ const k = d.toUpperCase().charCodeAt(0);
+      if(k >= 64 && k <= 95){ skicka(String.fromCharCode(k & 0x1f)); return; } }
   }
   skicka(d);
 }
 
-// auth = {password:"..."} ELLER {private_key:"..."}
 function anslutMed(auth){
+  aktivtAuth = auth;
   document.getElementById('login').remove();
   document.getElementById('session').style.display = 'flex';
-
   term = new Terminal({fontSize:14, theme:{background:'#0d1117'}});
-  fit = new FitAddon.FitAddon();
-  term.loadAddon(fit);
-  term.open(document.getElementById('term'));
-  fit.fit();
-
+  fit = new FitAddon.FitAddon(); term.loadAddon(fit);
+  term.open(document.getElementById('term')); fit.fit();
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   sock = new WebSocket(proto + '://' + location.host + '/terminal/ws');
-  sock.onopen = () => {
-    sock.send(JSON.stringify(Object.assign(
-      {host:HOST, port:PORT, user:USER, cols:term.cols, rows:term.rows}, auth)));
-    term.focus();
-  };
+  sock.onopen = () => { sock.send(JSON.stringify(Object.assign(
+    {host:HOST, port:PORT, user:USER, cols:term.cols, rows:term.rows}, auth))); term.focus(); };
   sock.onmessage = (ev) => term.write(ev.data);
   sock.onclose = () => term.write('\r\n\x1b[33m[frånkopplad]\x1b[0m\r\n');
   term.onData(hanteraInput);
-  window.addEventListener('resize', () => fit.fit());
+  window.addEventListener('resize', () => { if(fit) fit.fit(); });
 }
 function anslut(){ anslutMed({password: document.getElementById('password').value}); }
-
 document.getElementById('anslut').addEventListener('click', anslut);
-document.getElementById('password').addEventListener('keydown', (e) => {
-  if(e.key === 'Enter') anslut();
-});
-
-// Sparad nyckel eller lösenord för den här anslutningen? Logga in direkt.
+document.getElementById('password').addEventListener('keydown', (e) => { if(e.key==='Enter') anslut(); });
 (function(){
   const conns = JSON.parse(localStorage.getItem(NYCKEL) || '[]');
   const m = conns.find(c => c.user===USER && c.host===HOST && String(c.port)===String(PORT));
@@ -139,46 +153,118 @@ document.getElementById('password').addEventListener('keydown', (e) => {
   else if(m && m.losen) anslutMed({password:m.losen});
 })();
 
-// Tangentbordsraden
+// Tangentbordsrad
 document.getElementById('kCtrl').addEventListener('click', () => {
-  ctrlAktiv = !ctrlAktiv;
-  document.getElementById('kCtrl').classList.toggle('pa', ctrlAktiv);
-  if(term) term.focus();
-});
-document.querySelectorAll('#tbar button[data-seq]').forEach(b =>
-  b.addEventListener('click', () => skicka(b.dataset.seq)));
-document.querySelectorAll('#tbar button[data-txt]').forEach(b =>
-  b.addEventListener('click', () => skicka(b.dataset.txt)));
+  ctrlAktiv = !ctrlAktiv; document.getElementById('kCtrl').classList.toggle('pa', ctrlAktiv); if(term) term.focus(); });
+document.querySelectorAll('#tbar button[data-seq]').forEach(b => b.addEventListener('click', () => skicka(b.dataset.seq)));
+document.querySelectorAll('#tbar button[data-txt]').forEach(b => b.addEventListener('click', () => skicka(b.dataset.txt)));
 
-// "Logga in vidare"-meny
-function oppna(c){
-  const q = new URLSearchParams({host:c.host, user:c.user, port:c.port});
-  window.open('/terminal/session?' + q.toString(), '_blank', 'width=900,height=620,noopener');
-}
+// Anslutningar-meny
+function oppna(c){ const q = new URLSearchParams({host:c.host, user:c.user, port:c.port});
+  window.open('/terminal/session?' + q.toString(), '_blank', 'width=980,height=640,noopener'); }
 function byggMeny(){
   const meny = document.getElementById('meny');
-  const conns = JSON.parse(localStorage.getItem(NYCKEL) || '[]')
-    .sort((a,b) => (b.favorit?1:0)-(a.favorit?1:0));
+  const conns = JSON.parse(localStorage.getItem(NYCKEL) || '[]').sort((a,b)=>(b.favorit?1:0)-(a.favorit?1:0));
   meny.innerHTML = '';
-  conns.forEach(c => {
-    const r = document.createElement('div');
-    r.className = 'rad';
-    const stj = c.favorit ? '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:-1px"><path d="M12 2l3 6.9 7.6.6-5.8 5 1.8 7.4L12 18l-6.4 3.9 1.8-7.4-5.8-5 7.6-.6z"/></svg>' : '';
-    r.innerHTML = `<span>${c.user}@${c.host}:${c.port}</span><span>${stj}</span>`;
-    r.onclick = () => { oppna(c); meny.style.display='none'; };
-    meny.appendChild(r);
-  });
-  const ny = document.createElement('div');
-  ny.className = 'rad ny';
-  ny.textContent = '+ Ny anslutning…';
-  ny.onclick = () => window.open('/terminal', '_blank');
-  meny.appendChild(ny);
+  conns.forEach(c => { const r = document.createElement('div'); r.className='rad';
+    r.textContent = `${c.user}@${c.host}:${c.port}`;
+    r.onclick = () => { oppna(c); meny.style.display='none'; }; meny.appendChild(r); });
+  const ny = document.createElement('div'); ny.className='rad ny'; ny.textContent='+ Ny anslutning…';
+  ny.onclick = () => window.open('/terminal', '_blank'); meny.appendChild(ny);
 }
 document.getElementById('menyknapp').addEventListener('click', () => {
-  const meny = document.getElementById('meny');
-  const visa = meny.style.display !== 'block';
-  if(visa) byggMeny();
-  meny.style.display = visa ? 'block' : 'none';
+  const meny = document.getElementById('meny'); const visa = meny.style.display !== 'block';
+  if(visa) byggMeny(); meny.style.display = visa ? 'block' : 'none'; });
+
+// ---- Filpanel (SFTP + lokalt filsystem) ----
+let fjarrVag = '.', lokalDir = null;
+const filIkon = (dir) => dir
+  ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#3fb6ff" stroke-width="1.8"><path d="M3 7h6l2 2h10v10H3z"/></svg>'
+  : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#8b949e" stroke-width="1.8"><path d="M6 2h9l3 3v17H6z"/></svg>';
+const storlek = (n) => n<1024?n+' B':n<1048576?(n/1024).toFixed(0)+' kB':(n/1048576).toFixed(1)+' MB';
+
+async function sftpJSON(ep, extra){
+  const body = Object.assign({host:HOST, user:USER, port:PORT}, aktivtAuth, extra);
+  const r = await fetch('/sftp/'+ep, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  return r.json();
+}
+function credFält(fd){ fd.append('host',HOST); fd.append('user',USER); fd.append('port',PORT);
+  if(aktivtAuth.password) fd.append('password',aktivtAuth.password);
+  if(aktivtAuth.private_key) fd.append('private_key',aktivtAuth.private_key); }
+
+async function ritaFjarr(){
+  const d = await sftpJSON('list', {path: fjarrVag});
+  if(d.fel){ document.getElementById('fjarrLista').innerHTML = `<div class="fil">Fel: ${d.fel}</div>`; return; }
+  fjarrVag = d.path;
+  document.getElementById('fjarrVag').textContent = fjarrVag;
+  const lista = document.getElementById('fjarrLista'); lista.innerHTML = '';
+  const upp = document.createElement('div'); upp.className='fil'; upp.innerHTML = filIkon(true)+'<span>..</span>';
+  upp.onclick = () => { fjarrVag = fjarrVag.replace(/\/[^/]+$/, '') || '/'; ritaFjarr(); }; lista.appendChild(upp);
+  d.poster.forEach(p => { const el = document.createElement('div'); el.className='fil';
+    el.innerHTML = `${filIkon(p.dir)}<span>${p.namn}</span>${p.dir?'':`<span class="sz">${storlek(p.storlek)}</span>`}`;
+    el.onclick = () => { if(p.dir){ fjarrVag = (fjarrVag.replace(/\/$/,'')) + '/' + p.namn; ritaFjarr(); }
+                         else laddaNer(p.namn); }; lista.appendChild(el); });
+}
+async function laddaNer(namn){
+  if(!lokalDir){ alert('Välj en lokal mapp först.'); return; }
+  const body = Object.assign({host:HOST,user:USER,port:PORT,path:fjarrVag+'/'+namn}, aktivtAuth);
+  const r = await fetch('/sftp/download', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const blob = await r.blob();
+  const fh = await lokalDir.getFileHandle(namn, {create:true});
+  const w = await fh.createWritable(); await w.write(blob); await w.close();
+  ritaLokal();
+}
+async function laddaUpp(namn){
+  const fh = await lokalDir.getFileHandle(namn); const file = await fh.getFile();
+  const fd = new FormData(); credFält(fd); fd.append('path', fjarrVag); fd.append('fil', file, namn);
+  await fetch('/sftp/upload', {method:'POST', body:fd}); ritaFjarr();
+}
+async function ritaLokal(){
+  const lista = document.getElementById('lokalLista'); lista.innerHTML = '';
+  if(!lokalDir) return;
+  document.getElementById('lokalVag').textContent = lokalDir.name + '/';
+  const poster = [];
+  for await (const [namn, h] of lokalDir.entries()) poster.push({namn, dir:h.kind==='directory'});
+  poster.sort((a,b)=>(a.dir!==b.dir)?(a.dir?-1:1):a.namn.localeCompare(b.namn));
+  poster.forEach(p => { const el = document.createElement('div'); el.className='fil';
+    el.innerHTML = `${filIkon(p.dir)}<span>${p.namn}</span>`;
+    if(!p.dir) el.onclick = () => laddaUpp(p.namn); lista.appendChild(el); });
+}
+document.getElementById('valjMapp').addEventListener('click', async () => {
+  try { lokalDir = await window.showDirectoryPicker(); ritaLokal(); }
+  catch(e){ /* avbrutet */ }
+});
+document.getElementById('syncUpp').addEventListener('click', async () => {
+  if(!lokalDir){ alert('Välj lokal mapp först.'); return; }
+  const d = await sftpJSON('list', {path: fjarrVag});
+  const finns = new Set((d.poster||[]).filter(p=>!p.dir).map(p=>p.namn));
+  for await (const [namn, h] of lokalDir.entries())
+    if(h.kind==='file' && !finns.has(namn)) await laddaUpp(namn);
+  ritaFjarr();
+});
+document.getElementById('syncNer').addEventListener('click', async () => {
+  if(!lokalDir){ alert('Välj lokal mapp först.'); return; }
+  const lokala = new Set(); for await (const [namn, h] of lokalDir.entries()) if(h.kind==='file') lokala.add(namn);
+  const d = await sftpJSON('list', {path: fjarrVag});
+  for(const p of (d.poster||[])) if(!p.dir && !lokala.has(p.namn)) await laddaNer(p.namn);
+});
+// drag-and-drop upp på fjärrpanelen
+const fjarrEl = document.getElementById('fpFjarr');
+fjarrEl.addEventListener('dragover', e => { e.preventDefault(); fjarrEl.classList.add('drop'); });
+fjarrEl.addEventListener('dragleave', () => fjarrEl.classList.remove('drop'));
+fjarrEl.addEventListener('drop', async e => {
+  e.preventDefault(); fjarrEl.classList.remove('drop');
+  for(const file of e.dataTransfer.files){
+    const fd = new FormData(); credFält(fd); fd.append('path', fjarrVag); fd.append('fil', file, file.name);
+    await fetch('/sftp/upload', {method:'POST', body:fd});
+  }
+  ritaFjarr();
+});
+document.getElementById('filknapp').addEventListener('click', () => {
+  const p = document.getElementById('filpanel'); const visa = p.style.display !== 'grid';
+  p.style.display = visa ? 'grid' : 'none';
+  document.getElementById('filknapp').classList.toggle('pa', visa);
+  if(visa){ ritaFjarr(); if(lokalDir) ritaLokal(); }
 });
 </script>
 </body>
