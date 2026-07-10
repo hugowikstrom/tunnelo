@@ -8,7 +8,7 @@ SPRAK = {"sv": "Svenska", "en": "English"}
 TEXTER = {
     "sv": {
         "tagline": "privat VPN — koppla in dina enheter",
-        "tillbaka": "← Tillbaka",
+        "tillbaka": "Tillbaka",
         "logga_ut": "Logga ut",
         # login
         "logga_in": "Logga in",
@@ -21,7 +21,7 @@ TEXTER = {
         "verifiera_admin": "Verifiera administratör",
         "kod_mailad": "Vi mailade en engångskod till",
         "inloggningskod": "Inloggningskod",
-        "annan_adress": "← Annan adress",
+        "annan_adress": "Annan adress",
         "fel_kod": "Fel eller utgången kod.",
         # setup
         "setup_undertitel": "första start — skapa administratör",
@@ -56,9 +56,9 @@ TEXTER = {
         "scanna_mobil": "Scanna med WireGuard-appen på mobilen.",
         "config_avancerat": "Config (avancerat)",
         "config_privat_varning": "Innehåller din privata nyckel — dela den inte.",
-        "ladda_conf": "⬇ Ladda ner .conf",
-        "install_skript_knapp": "⬇ Installationsskript",
-        "maila_lank": "✉ Maila installationslänken",
+        "ladda_conf": "Ladda ner .conf",
+        "install_skript_knapp": "Installationsskript",
+        "maila_lank": "Maila installationslänken",
         "lank_mailad": "Installationslänken mailades till dig.",
         # terminal
         "ssh_anslutningar": "SSH-anslutningar",
@@ -69,7 +69,7 @@ TEXTER = {
     },
     "en": {
         "tagline": "private VPN — connect your devices",
-        "tillbaka": "← Back",
+        "tillbaka": "Back",
         "logga_ut": "Log out",
         "logga_in": "Log in",
         "mailadress": "Email address",
@@ -80,7 +80,7 @@ TEXTER = {
         "verifiera_admin": "Verify administrator",
         "kod_mailad": "We emailed a one-time code to",
         "inloggningskod": "Login code",
-        "annan_adress": "← Different address",
+        "annan_adress": "Different address",
         "fel_kod": "Wrong or expired code.",
         "setup_undertitel": "first run — create administrator",
         "setup_titel": "Welcome! Create administrator",
@@ -111,9 +111,9 @@ TEXTER = {
         "scanna_mobil": "Scan with the WireGuard app on your phone.",
         "config_avancerat": "Config (advanced)",
         "config_privat_varning": "Contains your private key — don't share it.",
-        "ladda_conf": "⬇ Download .conf",
-        "install_skript_knapp": "⬇ Install script",
-        "maila_lank": "✉ Email the install link",
+        "ladda_conf": "Download .conf",
+        "install_skript_knapp": "Install script",
+        "maila_lank": "Email the install link",
         "lank_mailad": "The install link was emailed to you.",
         "ssh_anslutningar": "SSH connections",
         "ny_anslutning": "New connection",

@@ -43,6 +43,12 @@ function oppna(c){
               'width=900,height=620,noopener');
 }
 
+// Stjärnikon (SVG) — fylld för favorit, kontur annars.
+function stjarna(fylld){
+  const f = fylld ? 'currentColor' : 'none';
+  return `<svg viewBox="0 0 24 24" width="15" height="15" fill="${f}" stroke="currentColor" stroke-width="1.6" style="vertical-align:-2px"><path d="M12 2l3 6.9 7.6.6-5.8 5 1.8 7.4L12 18l-6.4 3.9 1.8-7.4-5.8-5 7.6-.6z"/></svg>`;
+}
+
 function rita(){
   const lista = document.getElementById('lista');
   let conns = las();
@@ -58,8 +64,8 @@ function rita(){
         <strong>${idFor(c)}</strong>
       </div>
       <div style="display:flex;gap:.4rem">
-        <button class="btn ghost stjarna" title="Favorit">${c.favorit ? '★' : '☆'}</button>
-        <button class="btn danger bort">Ta bort</button>
+        <button class="btn ghost stjarna" title="Favorit">${stjarna(c.favorit)}</button>
+        <button class="btn danger bort">{{ t('ta_bort') }}</button>
       </div>`;
     rad.querySelector('.oppna').onclick = () => oppna(c);
     rad.querySelector('.stjarna').onclick = () => {

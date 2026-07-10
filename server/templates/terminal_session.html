@@ -112,7 +112,8 @@ function byggMeny(){
   conns.forEach(c => {
     const r = document.createElement('div');
     r.className = 'rad';
-    r.innerHTML = `<span>${c.user}@${c.host}:${c.port}</span><span>${c.favorit?'★':''}</span>`;
+    const stj = c.favorit ? '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="vertical-align:-1px"><path d="M12 2l3 6.9 7.6.6-5.8 5 1.8 7.4L12 18l-6.4 3.9 1.8-7.4-5.8-5 7.6-.6z"/></svg>' : '';
+    r.innerHTML = `<span>${c.user}@${c.host}:${c.port}</span><span>${stj}</span>`;
     r.onclick = () => { oppna(c); meny.style.display='none'; };
     meny.appendChild(r);
   });

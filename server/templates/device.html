@@ -1,7 +1,17 @@
 {% extends "base.html" %}
 {% block titel %} — {{ device.namn }}{% endblock %}
-{% block topphoger %}<a class="btn ghost" href="{{ url_for('home') }}">← Tillbaka</a>{% endblock %}
+{% block topphoger %}<a class="btn ghost" href="{{ url_for('home') }}">{{ t('tillbaka') }}</a>{% endblock %}
 {% block innehall %}
+{# --- SVG-ikoner (currentColor, inga emojis) --- #}
+{% set ic_mobil %}<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>{% endset %}
+{% set ic_linux %}<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M14.62 8.35c-.42.28-1.75 1-1.95 1.13-.4.26-.75.23-1.15-.03-.2-.13-1.5-.83-1.92-1.1-.5-.31-.47-.75.06-.99.7-.32 1.46-.5 2.28-.5.82 0 1.58.18 2.28.5.53.24.56.68.06.99zM12 1.5c-2.9 0-4.13 2.03-4.2 4.3-.03.86.06 1.72.06 2.5 0 .9-.5 1.62-1.02 2.44-.6.95-1.3 1.94-1.3 3.36 0 .5.1.9.24 1.25-.3.2-.5.5-.5.9 0 .3.14.55.24.78.1.23.14.4.1.55-.1.4-.06.75.14 1.02.2.27.53.42.9.5.55.14 1.2.1 1.76.35.6.28 1.16.5 1.7.5.6 0 1.1-.28 1.4-.85.4-.02.86-.2 1.55-.24.5-.03 1.1.18 1.78.14.06.3.22.55.5.7.5.28 1.16.16 1.66-.22.5-.4 1.15-.75 1.66-1.06.4-.24.6-.55.55-.9-.04-.3-.24-.53-.6-.9-.14-.16-.2-.44-.28-.76-.08-.32-.16-.64-.44-.83.28-.9.16-1.8-.13-2.6-.4-1.06-1.06-1.9-1.55-2.5-.55-.7-1.1-1.36-1.1-2.4 0-.78.1-1.64.06-2.5C16.13 3.53 14.9 1.5 12 1.5z"/></svg>{% endset %}
+{% set ic_apple %}<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.287-1.82-2.323-4.63-2.323-7.28 0-4.28 2.797-6.55 5.552-6.55 1.448 0 2.675.95 3.6.95.865 0 2.222-1.01 3.902-1.01.643 0 2.966.06 4.485 2.28-.116.07-2.618 1.53-2.618 4.56 0 3.52 3.09 4.76 3.09 4.76z"/></svg>{% endset %}
+{% set ic_windows %}<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-13.051-1.801"/></svg>{% endset %}
+{% set ic_server %}<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><line x1="7" y1="7" x2="7.01" y2="7"/><line x1="7" y1="17" x2="7.01" y2="17"/></svg>{% endset %}
+{% set ic_ner %}<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>{% endset %}
+{% set ic_mail %}<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>{% endset %}
+{% set ic_ok %}<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M20 6L9 17l-5-5"/></svg>{% endset %}
+
 <div class="card">
   <h2>{{ device.namn }} · <span class="ip">{{ device.vpn_ip }}</span></h2>
   <div class="qr">{{ qr|safe }}</div>
@@ -9,17 +19,17 @@
 </div>
 
 {% if request.args.mailad %}
-<div class="card" style="border-color:var(--accent2)">✅ {{ t('lank_mailad') }}</div>
+<div class="card" style="border-color:var(--accent2)">{{ ic_ok|safe }} {{ t('lank_mailad') }}</div>
 {% endif %}
 
 <div class="card">
   <h2>{{ t('installera') }}</h2>
   <div class="flikar">
-    <button class="flik aktiv" data-mal="mobil">📱 Mobil</button>
-    <button class="flik" data-mal="linux">🐧 Linux</button>
-    <button class="flik" data-mal="mac">🍎 Mac</button>
-    <button class="flik" data-mal="windows">🪟 Windows</button>
-    <button class="flik" data-mal="server">🖥️ Server</button>
+    <button class="flik aktiv" data-mal="mobil">{{ ic_mobil|safe }} Mobil</button>
+    <button class="flik" data-mal="linux">{{ ic_linux|safe }} Linux</button>
+    <button class="flik" data-mal="mac">{{ ic_apple|safe }} Mac</button>
+    <button class="flik" data-mal="windows">{{ ic_windows|safe }} Windows</button>
+    <button class="flik" data-mal="server">{{ ic_server|safe }} Server</button>
   </div>
 
   <div class="panel aktiv" id="mobil">
@@ -39,22 +49,20 @@
       och startar tunneln — allt i ett. Länken är hemlig och personlig.</p>
     <form method="post" action="{{ url_for('maila_lank', device_id=device.id) }}"
           style="margin:.6rem 0">
-      <button class="btn" type="submit">{{ t('maila_lank') }}</button>
+      <button class="btn" type="submit">{{ ic_mail|safe }} {{ t('maila_lank') }}</button>
     </form>
     <a class="btn green" href="{{ url_for('install_skript', device_id=device.id) }}">
-      {{ t('install_skript_knapp') }}</a>
+      {{ ic_ner|safe }} {{ t('install_skript_knapp') }}</a>
   </div>
 
   <div class="panel" id="mac">
     <p><strong>macOS</strong> — två sätt:</p>
     <p class="muted" style="margin:.2rem 0">A) Terminal (kräver
       <a href="https://brew.sh" style="color:var(--accent)">Homebrew</a>):</p>
-    <a class="btn green" href="{{ url_for('install_skript', device_id=device.id) }}">
-      ⬇ Ladda ner installationsskript</a>
-    <pre style="margin-top:.6rem">bash tunnelo-{{ device.namn }}.sh</pre>
+    <pre>curl -sSL {{ curl_url }} | sudo bash</pre>
     <p class="muted" style="margin:.6rem 0 .2rem">B) App: installera WireGuard från
-      App Store, ladda ner .conf nedan och importera den.</p>
-    <a class="btn" href="{{ url_for('ladda_config', device_id=device.id) }}">⬇ Ladda ner .conf</a>
+      App Store, ladda ner .conf och importera den.</p>
+    <a class="btn" href="{{ url_for('ladda_config', device_id=device.id) }}">{{ ic_ner|safe }} {{ t('ladda_conf') }}</a>
   </div>
 
   <div class="panel" id="windows">
@@ -63,7 +71,7 @@
       <li>Installera <strong>WireGuard</strong> från
         <a href="https://www.wireguard.com/install/" style="color:var(--accent)">wireguard.com</a>.</li>
       <li>Ladda ner din config:
-        <a class="btn" style="padding:.3rem .6rem;font-size:.8rem" href="{{ url_for('ladda_config', device_id=device.id) }}">⬇ .conf</a></li>
+        <a class="btn" style="padding:.3rem .6rem;font-size:.8rem" href="{{ url_for('ladda_config', device_id=device.id) }}">{{ ic_ner|safe }} .conf</a></li>
       <li>Öppna WireGuard → <em>Importera tunnel(er) från fil</em> → välj .conf → <em>Aktivera</em>.</li>
     </ol>
   </div>
@@ -73,7 +81,7 @@
     <pre>curl -sSL {{ curl_url }} | sudo bash</pre>
     <form method="post" action="{{ url_for('maila_lank', device_id=device.id) }}"
           style="margin:.6rem 0">
-      <button class="btn" type="submit">{{ t('maila_lank') }}</button>
+      <button class="btn" type="submit">{{ ic_mail|safe }} {{ t('maila_lank') }}</button>
     </form>
     <p class="muted" style="margin-bottom:0">Tunneln startar automatiskt vid omstart
       om du kör <code>sudo systemctl enable wg-quick@tunnelo</code>.</p>
@@ -88,8 +96,9 @@
 
 <style>
   .flikar{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem}
-  .flik{background:transparent;border:1px solid var(--line);color:var(--dim);
-    padding:.5rem .8rem;border-radius:9px;cursor:pointer;font-size:.9rem}
+  .flik{display:inline-flex;align-items:center;gap:.4rem;background:transparent;
+    border:1px solid var(--line);color:var(--dim);padding:.5rem .8rem;
+    border-radius:9px;cursor:pointer;font-size:.9rem}
   .flik.aktiv{background:var(--accent);color:#04121f;border-color:var(--accent);font-weight:600}
   .panel{display:none}
   .panel.aktiv{display:block}
