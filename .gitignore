@@ -17,3 +17,5 @@ __pycache__/
 
 # WireGuard-configar som genereras lokalt
 *.conf
+
+server/.env

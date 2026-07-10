@@ -40,6 +40,17 @@ from flask_sock import Sock
 
 import hub
 
+# Ladda hemligheter från server/.env (KEY=VALUE per rad) om filen finns.
+# Riktiga miljövariabler vinner (setdefault skriver bara om de saknas).
+_envfil = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+if os.path.exists(_envfil):
+    with open(_envfil) as _f:
+        for _rad in _f:
+            _rad = _rad.strip()
+            if _rad and not _rad.startswith("#") and "=" in _rad:
+                _k, _v = _rad.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # för sessions-cookien
 sock = Sock(app)  # websockets för web-terminalen
