@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block titel %} — terminal{% endblock %}
+{% block undertitel %}SSH-terminal i webbläsaren{% endblock %}
+{% block topphoger %}<a class="btn ghost" href="{{ url_for('home') }}">← Tillbaka</a>{% endblock %}
+{% block innehall %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<style>
+  #term{height:65vh;border-radius:9px;overflow:hidden}
+  .term-form{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+  .term-form .full{grid-column:1/-1}
+  .term-form input{margin-bottom:0}
+</style>
+
+<div class="card" id="anslut-kort">
+  <h2>Anslut via SSH</h2>
+  <form class="term-form" id="anslut">
+    <div class="full">
+      <label>Host (t.ex. localhost eller 10.44.0.x på VPN:et)</label>
+      <input type="text" id="host" value="localhost">
+    </div>
+    <div>
+      <label>Användare</label>
+      <input type="text" id="user" autocapitalize="none" autocomplete="username">
+    </div>
+    <div>
+      <label>Port</label>
+      <input type="text" id="port" value="22">
+    </div>
+    <div class="full">
+      <label>Lösenord</label>
+      <input type="password" id="password" autocomplete="current-password">
+    </div>
+    <div class="full">
+      <button type="submit">Öppna terminal</button>
+    </div>
+  </form>
+</div>
+
+<div class="card" id="term-kort" style="display:none">
+  <div id="term"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script>
+document.getElementById('anslut').addEventListener('submit', function(e){
+  e.preventDefault();
+  document.getElementById('anslut-kort').style.display = 'none';
+  document.getElementById('term-kort').style.display = 'block';
+
+  const term = new Terminal({fontSize:14, theme:{background:'#0d1117'}});
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(document.getElementById('term'));
+  fit.fit();
+
+  // wss om sidan är https, annars ws
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(proto + '://' + location.host + '/terminal/ws');
+
+  ws.onopen = function(){
+    ws.send(JSON.stringify({
+      host: document.getElementById('host').value,
+      port: document.getElementById('port').value,
+      user: document.getElementById('user').value,
+      password: document.getElementById('password').value,
+      cols: term.cols, rows: term.rows
+    }));
+    term.focus();
+  };
+  ws.onmessage = function(ev){ term.write(ev.data); };
+  ws.onclose = function(){ term.write('\r\n\x1b[33m[frånkopplad]\x1b[0m\r\n'); };
+  term.onData(function(d){ ws.send(d); });
+
+  // anpassa storleken när fönstret ändras
+  window.addEventListener('resize', function(){ fit.fit(); });
+});
+</script>
+{% endblock %}

@@ -36,6 +36,13 @@
   {% endfor %}
 </div>
 
+<div class="card">
+  <h2>Verktyg</h2>
+  <a class="btn" href="{{ url_for('terminal') }}">Öppna SSH-terminal</a>
+  <p class="muted" style="margin:.8rem 0 0">Öppna en terminal i webbläsaren mot
+    servern eller en maskin på VPN-nätet — funkar även på mobilen.</p>
+</div>
+
 <p class="muted">Servern nås på <span class="ip">{{ endpoint }}</span> ·
   trafik som går genom VPN: <span class="ip">{{ allowed }}</span></p>
 {% endblock %}

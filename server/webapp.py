@@ -27,11 +27,13 @@ import qrcode
 import qrcode.image.svg
 from flask import (Flask, Response, redirect, render_template, request,
                    session, url_for)
+from flask_sock import Sock
 
 import hub
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # för sessions-cookien
+sock = Sock(app)  # websockets för web-terminalen
 
 # --- Inställningar ------------------------------------------------------------
 LOSEN = os.environ.get("TUNNELO_LOSEN", "hugo")
@@ -199,6 +201,78 @@ def ta_bort_device(device_id):
         devices = [d for d in devices if d["id"] != device_id]
         save_devices(devices)
     return redirect(url_for("home"))
+
+
+# --- Web-terminal (SSH i webbläsaren) ----------------------------------------
+@app.route("/terminal")
+def terminal():
+    """Sida med en terminal (xterm.js) man kan öppna en SSH-session i."""
+    return render_template("terminal.html")
+
+
+@sock.route("/terminal/ws")
+def terminal_ws(ws):
+    """
+    Websocket som kopplar webbterminalen till en riktig SSH-session via paramiko.
+    Första meddelandet från klienten är JSON: {host, port, user, password, cols, rows}.
+    Sedan skickas tangenttryck som text; SSH-utdata skickas tillbaka.
+    Kräver inloggning (samma sessions-cookie som resten av portalen).
+    """
+    import json
+    import select
+    import threading
+
+    import paramiko
+
+    if not inloggad():
+        return  # neka om ej inloggad
+
+    init = json.loads(ws.receive())
+    klient = paramiko.SSHClient()
+    klient.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        klient.connect(init["host"], port=int(init.get("port", 22)),
+                       username=init["user"], password=init.get("password"),
+                       timeout=10, look_for_keys=False, allow_agent=False)
+    except Exception as e:
+        ws.send(f"\r\n\x1b[31mAnslutning misslyckades: {e}\x1b[0m\r\n")
+        return
+
+    chan = klient.invoke_shell(term="xterm-256color",
+                               width=int(init.get("cols", 80)),
+                               height=int(init.get("rows", 24)))
+
+    def las_fran_ssh():
+        """Bakgrundstråd: SSH-utdata → webbläsaren."""
+        while True:
+            r, _, _ = select.select([chan], [], [], 1)
+            if chan in r:
+                try:
+                    data = chan.recv(4096)
+                except Exception:
+                    break
+                if not data:
+                    break
+                try:
+                    ws.send(data.decode(errors="replace"))
+                except Exception:
+                    break
+            if chan.closed:
+                break
+
+    t = threading.Thread(target=las_fran_ssh, daemon=True)
+    t.start()
+    try:
+        while True:
+            msg = ws.receive()
+            if msg is None:
+                break
+            chan.send(msg)
+    except Exception:
+        pass
+    finally:
+        chan.close()
+        klient.close()
 
 
 if __name__ == "__main__":

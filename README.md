@@ -60,6 +60,27 @@ på 8090. Öppna sidan, logga in, klicka **Ny enhet**, scanna QR:en.
 | `TUNNELO_HUB_PORT` | `51820` | WireGuard-navets UDP-port (byt om upptagen) |
 | `TUNNELO_ALLOWED` | `10.44.0.0/24` | vad som routas genom VPN. `0.0.0.0/0` = **full tunnel** (all trafik) |
 
+### Web-terminal (SSH i webbläsaren)
+Portalen har en inbyggd SSH-terminal (`Öppna SSH-terminal` på startsidan).
+Den kör i webbläsaren (xterm.js) och kopplar via en websocket till en riktig
+SSH-session (paramiko på servern). Praktiskt på **mobilen** där SSH annars är
+krångligt — logga in på portalen, öppna terminalen mot servern eller en maskin
+på VPN-nätet (`10.44.0.x`). Skyddas av samma inloggning som resten av portalen.
+
+Portalen är **mobilanpassad** (responsiv layout, staplas snyggt på små skärmar).
+
+---
+
+## Om NAT och brandväggar
+Hub-and-spoke löser det mesta av NAT-problemet automatiskt: klienter bakom
+brandvägg skickar *utgående* UDP till navet, och `PersistentKeepalive = 25`
+(finns i klient-configen) håller hålet öppet så trafik kan gå både in och ut —
+**så länge navet har en publik, nåbar IP**. Då behövs ingen hålslagning.
+
+Det WireGuard *inte* löser själv är **direkt peer-to-peer mellan två NAT:ade
+klienter** (mesh utan att gå via navet). Det kräver STUN (upptäck egen publik
+ip:port), UDP-hålslagning och ett relä (TURN/DERP) som fallback — se *Nästa steg*.
+
 ---
 
 ## Mesh (klient-agent) — alternativ

@@ -15,7 +15,7 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);
     font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    line-height:1.5;padding:2rem 1rem}
+    line-height:1.5;padding:2rem 1rem;-webkit-text-size-adjust:100%}
   .wrap{max-width:640px;margin:0 auto}
   .brand{display:flex;align-items:center;gap:.6rem;font-size:1.6rem;
     font-weight:700;margin-bottom:.2rem}
@@ -29,7 +29,7 @@
   label{display:block;font-size:.85rem;color:var(--dim);margin-bottom:.3rem}
   input[type=text],input[type=password]{width:100%;padding:.7rem .8rem;
     border:1px solid var(--line);border-radius:9px;background:var(--bg);
-    color:var(--txt);font-size:1rem;margin-bottom:1rem}
+    color:var(--txt);font-size:16px;margin-bottom:1rem}
   button,.btn{display:inline-block;border:0;border-radius:9px;padding:.7rem 1.1rem;
     font-size:.95rem;font-weight:600;cursor:pointer;text-decoration:none;
     background:var(--accent);color:#04121f}
@@ -48,7 +48,16 @@
     display:block}
   .qr svg{width:100%;height:auto;display:block}
   .muted{color:var(--dim);font-size:.85rem}
-  .top{display:flex;justify-content:space-between;align-items:flex-start}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem}
+  /* Mobilanpassning: mindre marginaler och staplad layout på små skärmar */
+  @media (max-width:480px){
+    body{padding:1rem .8rem}
+    .card{padding:1.1rem}
+    .brand{font-size:1.4rem}
+    .row{flex-direction:column;align-items:stretch;gap:.6rem}
+    .row > div:last-child{display:flex;gap:.5rem}
+    .row .btn{flex:1;text-align:center}
+  }
 </style>
 </head>
 <body>
