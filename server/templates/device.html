@@ -5,20 +5,94 @@
 <div class="card">
   <h2>{{ device.namn }} · <span class="ip">{{ device.vpn_ip }}</span></h2>
   <div class="qr">{{ qr|safe }}</div>
-  <p class="muted" style="text-align:center">
-    Öppna <strong>WireGuard-appen</strong> → "+" → <em>Scanna QR-kod</em>.
-  </p>
-  <div style="text-align:center;margin-top:1rem">
-    <a class="btn green" href="{{ url_for('ladda_config', device_id=device.id) }}">
-      Ladda ner .conf (för dator)
-    </a>
+  <p class="muted" style="text-align:center">Scanna med WireGuard-appen på mobilen.</p>
+</div>
+
+<div class="card">
+  <h2>Installera</h2>
+  <div class="flikar">
+    <button class="flik aktiv" data-mal="mobil">📱 Mobil</button>
+    <button class="flik" data-mal="linux">🐧 Linux</button>
+    <button class="flik" data-mal="mac">🍎 Mac</button>
+    <button class="flik" data-mal="windows">🪟 Windows</button>
+    <button class="flik" data-mal="server">🖥️ Server</button>
+  </div>
+
+  <div class="panel aktiv" id="mobil">
+    <p><strong>Android / iPhone</strong></p>
+    <ol>
+      <li>Installera <strong>WireGuard</strong> från
+        <a href="https://www.wireguard.com/install/" style="color:var(--accent)">App Store / Google Play</a>.</li>
+      <li>Öppna appen → <strong>+</strong> → <em>Scanna QR-kod</em>.</li>
+      <li>Scanna koden högst upp på sidan → aktivera tunneln.</li>
+    </ol>
+  </div>
+
+  <div class="panel" id="linux">
+    <p><strong>Ubuntu / Debian / Fedora / Arch</strong> — klistra in i en terminal:</p>
+    <pre>curl -sSL {{ curl_url }} | sudo bash</pre>
+    <p class="muted" style="margin:.4rem 0">Installerar WireGuard, lägger in nyckeln
+      och startar tunneln — allt i ett. Länken är hemlig och personlig.</p>
+    <p class="muted" style="margin:.8rem 0 .3rem">Eller ladda ner och kör manuellt:</p>
+    <a class="btn green" href="{{ url_for('install_skript', device_id=device.id) }}">
+      ⬇ Installationsskript</a>
+    <pre style="margin-top:.6rem">bash tunnelo-{{ device.namn }}.sh</pre>
+  </div>
+
+  <div class="panel" id="mac">
+    <p><strong>macOS</strong> — två sätt:</p>
+    <p class="muted" style="margin:.2rem 0">A) Terminal (kräver
+      <a href="https://brew.sh" style="color:var(--accent)">Homebrew</a>):</p>
+    <a class="btn green" href="{{ url_for('install_skript', device_id=device.id) }}">
+      ⬇ Ladda ner installationsskript</a>
+    <pre style="margin-top:.6rem">bash tunnelo-{{ device.namn }}.sh</pre>
+    <p class="muted" style="margin:.6rem 0 .2rem">B) App: installera WireGuard från
+      App Store, ladda ner .conf nedan och importera den.</p>
+    <a class="btn" href="{{ url_for('ladda_config', device_id=device.id) }}">⬇ Ladda ner .conf</a>
+  </div>
+
+  <div class="panel" id="windows">
+    <p><strong>Windows</strong></p>
+    <ol>
+      <li>Installera <strong>WireGuard</strong> från
+        <a href="https://www.wireguard.com/install/" style="color:var(--accent)">wireguard.com</a>.</li>
+      <li>Ladda ner din config:
+        <a class="btn" style="padding:.3rem .6rem;font-size:.8rem" href="{{ url_for('ladda_config', device_id=device.id) }}">⬇ .conf</a></li>
+      <li>Öppna WireGuard → <em>Importera tunnel(er) från fil</em> → välj .conf → <em>Aktivera</em>.</li>
+    </ol>
+  </div>
+
+  <div class="panel" id="server">
+    <p><strong>Linux-server</strong> (koppla in en server i nätet) — ett kommando:</p>
+    <pre>curl -sSL {{ curl_url }} | sudo bash</pre>
+    <p class="muted" style="margin-bottom:0">Tunneln startar automatiskt vid omstart
+      om du kör <code>sudo systemctl enable wg-quick@tunnelo</code>.</p>
   </div>
 </div>
 
 <div class="card">
-  <h2>Config</h2>
+  <h2>Config (avancerat)</h2>
   <pre>{{ conf }}</pre>
-  <p class="muted" style="margin-bottom:0">Den privata nyckeln finns bara i den här
-    filen — dela den inte.</p>
+  <p class="muted" style="margin-bottom:0">Innehåller din privata nyckel — dela den inte.</p>
 </div>
+
+<style>
+  .flikar{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem}
+  .flik{background:transparent;border:1px solid var(--line);color:var(--dim);
+    padding:.5rem .8rem;border-radius:9px;cursor:pointer;font-size:.9rem}
+  .flik.aktiv{background:var(--accent);color:#04121f;border-color:var(--accent);font-weight:600}
+  .panel{display:none}
+  .panel.aktiv{display:block}
+  .panel ol,.panel p{margin:.4rem 0}
+  .panel li{margin:.4rem 0}
+  code{background:var(--bg);padding:.1rem .3rem;border-radius:4px;font-size:.85em}
+</style>
+<script>
+document.querySelectorAll('.flik').forEach(f => f.addEventListener('click', () => {
+  document.querySelectorAll('.flik').forEach(x => x.classList.remove('aktiv'));
+  document.querySelectorAll('.panel').forEach(x => x.classList.remove('aktiv'));
+  f.classList.add('aktiv');
+  document.getElementById(f.dataset.mal).classList.add('aktiv');
+}));
+</script>
 {% endblock %}

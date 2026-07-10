@@ -293,8 +293,9 @@ def krav_login():
         if request.endpoint not in ("setup", "setup_verify"):
             return redirect(url_for("setup"))
         return
-    # Normalt läge: inloggning/verifiering är öppna, resten kräver inloggning.
-    if request.endpoint in ("login", "verify", "setup", "setup_verify"):
+    # Normalt läge: inloggning/verifiering + curl-installlänk är öppna.
+    if request.endpoint in ("login", "verify", "setup", "setup_verify",
+                            "install_via_token"):
         return
     if not inloggad():
         return redirect(url_for("login"))
@@ -448,6 +449,7 @@ def skapa_device():
         "pub": pub,
         "vpn_ip": vpn_ip,
         "agare": session.get("epost"),  # vem enheten tillhör
+        "install_token": secrets.token_urlsafe(48),  # lång hemlig token för curl
     }
     hub.add_peer(pub, vpn_ip)
     devices.append(device)
@@ -457,12 +459,18 @@ def skapa_device():
 
 @app.route("/devices/<device_id>")
 def visa_device(device_id):
-    device = next((d for d in load_devices() if d["id"] == device_id), None)
+    devices = load_devices()
+    device = next((d for d in devices if d["id"] == device_id), None)
     if not device:
         return "Enhet saknas", 404
+    # Ge äldre enheter en install-token (för curl-länken) om de saknar en.
+    if not device.get("install_token"):
+        device["install_token"] = secrets.token_urlsafe(48)
+        save_devices(devices)
     conf = bygg_klientconfig(device)
+    curl_url = f"{request.host_url.rstrip('/')}/i/{device['install_token']}"
     return render_template("device.html", device=device, conf=conf,
-                           qr=qr_svg(conf))
+                           qr=qr_svg(conf), curl_url=curl_url)
 
 
 @app.route("/devices/<device_id>/config")
@@ -474,6 +482,90 @@ def ladda_config(device_id):
     return Response(conf, mimetype="text/plain", headers={
         "Content-Disposition": f'attachment; filename="tunnelo-{device["namn"]}.conf"'
     })
+
+
+def bygg_install_skript(device):
+    """Bash-skript som installerar WireGuard, skriver configen och startar tunneln."""
+    conf = bygg_klientconfig(device)
+    return f"""#!/usr/bin/env bash
+# Tunnelo — installerar WireGuard och kopplar upp enheten "{device['namn']}".
+set -e
+IFACE=tunnelo
+CONF=$(cat <<'TUNNELO_EOF'
+{conf}
+TUNNELO_EOF
+)
+
+echo "Installerar WireGuard..."
+if command -v apt >/dev/null 2>&1; then
+    sudo apt update && sudo apt install -y wireguard
+elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y wireguard-tools
+elif command -v pacman >/dev/null 2>&1; then
+    sudo pacman -S --noconfirm wireguard-tools
+elif command -v brew >/dev/null 2>&1; then
+    brew install wireguard-tools
+else
+    echo "Hittade ingen pakethanterare — installera WireGuard manuellt."; exit 1
+fi
+
+echo "Skriver config och startar tunneln..."
+echo "$CONF" | sudo tee /etc/wireguard/$IFACE.conf >/dev/null
+sudo chmod 600 /etc/wireguard/$IFACE.conf
+sudo wg-quick down $IFACE 2>/dev/null || true
+sudo wg-quick up $IFACE
+
+echo ""
+echo "Klart! Du är uppkopplad mot Tunnelo som {device['vpn_ip']}."
+echo "Koppla ner:  sudo wg-quick down $IFACE"
+echo "Koppla upp:  sudo wg-quick up $IFACE"
+"""
+
+
+@app.route("/devices/<device_id>/install.sh")
+def install_skript(device_id):
+    """Nedladdningsbart installationsskript (kräver inloggning)."""
+    device = next((d for d in load_devices() if d["id"] == device_id), None)
+    if not device:
+        return "Enhet saknas", 404
+    return Response(bygg_install_skript(device), mimetype="text/x-shellscript",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="tunnelo-{device["namn"]}.sh"'})
+
+
+@app.route("/i/<token>")
+def install_via_token(token):
+    """
+    Curl-endpoint: kör t.ex.  curl -sSL <url>/i/<token> | sudo bash
+    Token är enhetens hemliga install_token (skapas när enheten skapas av en
+    inloggad användare). Skickar ett notifieringsmail till ägaren.
+    """
+    device = next((d for d in load_devices()
+                   if d.get("install_token") == token), None)
+    if not device:
+        return "# Ogiltig eller återkallad länk\n", 404
+    # Meddela ägaren att configen hämtades (säkerhet: upptäck obehörig användning).
+    agare = device.get("agare")
+    if agare and agare in las_anvandare():
+        try:
+            _notifiera_installation(agare, device)
+        except Exception:
+            pass
+    return Response(bygg_install_skript(device), mimetype="text/x-shellscript")
+
+
+def _notifiera_installation(epost, device):
+    """Maila ägaren att enhetens config hämtades via curl-länken."""
+    amne = "Tunnelo: en enhet installerades"
+    text = (f'Enheten "{device["namn"]}" ({device["vpn_ip"]}) kopplades just upp '
+            f"via installationslänken.\n\nVar det inte du? Ta bort enheten i "
+            f"Tunnelo-portalen så återkallas nyckeln.")
+    if RESEND_KEY:
+        skicka_resend(epost, amne, text)
+    elif SMTP_HOST:
+        skicka_smtp(epost, amne, text)
+    else:
+        print(f"[DEV] Installationsnotis till {epost}: {device['namn']}")
 
 
 @app.route("/devices/<device_id>/delete", methods=["POST"])
