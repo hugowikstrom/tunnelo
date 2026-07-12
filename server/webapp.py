@@ -185,11 +185,11 @@ def maila(till, amne, text):
         print(f"[DEV] Mail till {till}: {amne} :: {text[:80]}")
 
 
-def skicka_kod(epost, kod, lank):
-    """Maila inloggningskoden + en klickbar magic-länk (ett-klicks inloggning)."""
+def skicka_lank_mail(epost, lank):
+    """Maila enbart en inloggningslänk (ingen kod). Ett klick loggar in."""
     maila(epost, "Din Tunnelo-inloggning",
-          f"Din inloggningskod: {kod}\n\n"
-          f"Eller klicka för att logga in direkt:\n{lank}\n\n"
+          f"Klicka för att logga in:\n{lank}\n\n"
+          f"Öppna länken i samma webbläsare där du angav din mejladress.\n"
           f"Gäller i 10 minuter och kan bara användas en gång.")
 
 
@@ -300,6 +300,11 @@ def qr_svg(text):
 
 
 # --- Språk (i18n) ------------------------------------------------------------
+def tr(nyckel):
+    """Översätt en nyckel i backend-kod (mallar använder t())."""
+    return sprak.t(nyckel, session.get("lang", "sv"))
+
+
 @app.context_processor
 def injicera_sprak():
     """Gör t('nyckel'), lang och språklistan tillgängliga i alla mallar."""
@@ -329,34 +334,14 @@ def ar_admin():
     return session.get("admin") is True
 
 
-MAX_FORSOK = 5  # antal felaktiga kodförsök innan koden dör (mot brute-force)
-
-
-def skicka_ny_kod(epost):
-    """Skapa och maila en engångskod + magic-länk. Kom ihåg vem som väntar."""
-    kod = generera_kod()
+def skicka_ny_lank(epost):
+    """Skapa och maila en inloggningslänk. Binder token till DEN HÄR webbläsaren
+    via sessionen (pending_epost) så bara den kan slutföra inloggningen."""
     token = secrets.token_urlsafe(32)
-    PENDING[epost] = {"kod": kod, "token": token, "forsok": 0,
-                      "utgang": time.time() + KOD_GILTIGHET}
+    PENDING[epost] = {"token": token, "utgang": time.time() + KOD_GILTIGHET}
     lank = f"{request.host_url.rstrip('/')}/magic/{token}"
-    skicka_kod(epost, kod, lank)
+    skicka_lank_mail(epost, lank)
     session["pending_epost"] = epost
-
-
-def kolla_kod(epost, angiven):
-    """True om koden stämmer och inte gått ut. Räknar försök; för många → dör."""
-    post = PENDING.get(epost)
-    if not post or time.time() >= post["utgang"]:
-        return False
-    post["forsok"] = post.get("forsok", 0) + 1
-    if post["forsok"] > MAX_FORSOK:
-        PENDING.pop(epost, None)  # för många gissningar → koden ogiltig
-        return False
-    if angiven == post["kod"]:
-        PENDING.pop(epost, None)
-        session.pop("pending_epost", None)
-        return True
-    return False
 
 
 def hitta_magic(token):
@@ -389,7 +374,7 @@ def svara_inloggad(epost, admin):
 def krav_login():
     """Bootstrap till setup om ingen admin finns; annars kräv inloggning.
     En betrodd enhet (giltig enhets-cookie) loggas in direkt utan mail."""
-    if request.endpoint in ("static", "byt_sprak"):
+    if request.endpoint in ("static", "byt_sprak", "login_status"):
         return
     # Första gången: ingen admin finns → tvinga setup-flödet (magic tillåts
     # så första admin kan logga in via länken i mailet).
@@ -420,72 +405,66 @@ def setup():
     if request.method == "POST":
         epost = request.form.get("epost", "").strip().lower()
         if "@" in epost:
-            skicka_ny_kod(epost)
+            skicka_ny_lank(epost)
             return redirect(url_for("setup_verify"))
         fel = "Ange en giltig mailadress."
     return render_template("setup.html", fel=fel)
 
 
-@app.route("/setup/verify", methods=["GET", "POST"])
+@app.route("/setup/verify")
 def setup_verify():
-    """Verifiera admin-adressen och spara den som första användaren (admin)."""
+    """Väntesida under första start: väntar på att admin klickar länken."""
     if finns_admin():
         return redirect(url_for("login"))
     epost = session.get("pending_epost")
     if not epost:
         return redirect(url_for("setup"))
-    fel = None
-    if request.method == "POST":
-        if kolla_kod(epost, request.form.get("kod", "").strip()):
-            users = las_anvandare()
-            users[epost] = {"epost": epost, "admin": True,
-                            "allowed_ips": hub.NET_CIDR}
-            spara_anvandare(users)
-            return svara_inloggad(epost, True)
-        fel = "Fel eller utgången kod."
-    return render_template("verify.html", epost=epost, fel=fel, setup=True)
+    return render_template("verify.html", epost=epost, setup=True)
 
 
 # --- Inloggning --------------------------------------------------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    """Steg 1: mata in mailadress. Finns den som användare mailas en kod."""
+    """Steg 1: mata in mailadress. Finns den som användare mailas en länk."""
     fel = None
     if request.method == "POST":
         epost = request.form.get("epost", "").strip().lower()
         if epost in las_anvandare():
-            skicka_ny_kod(epost)
+            skicka_ny_lank(epost)
             return redirect(url_for("verify"))
         fel = "Adressen är inte registrerad i tvåstegsverifieringen."
     return render_template("login.html", fel=fel)
 
 
-@app.route("/verify", methods=["GET", "POST"])
+@app.route("/verify")
 def verify():
-    """Steg 2: mata in koden som mailades."""
+    """Steg 2: väntesida. Länken i mailet loggar in DENNA webbläsare; sidan
+    pollar och går vidare när det skett."""
     epost = session.get("pending_epost")
     if not epost:
         return redirect(url_for("login"))
-    fel = None
-    if request.method == "POST":
-        if kolla_kod(epost, request.form.get("kod", "").strip()):
-            admin = las_anvandare().get(epost, {}).get("admin", False)
-            return svara_inloggad(epost, admin)
-        fel = "Fel eller utgången kod."
-    return render_template("verify.html", epost=epost, fel=fel)
+    return render_template("verify.html", epost=epost)
+
+
+@app.route("/login-status")
+def login_status():
+    """Pollas av väntesidan. Säger om denna webbläsare nu är inloggad."""
+    return {"inloggad": bool(inloggad())}
 
 
 @app.route("/magic/<token>")
 def magic(token):
     """
-    Magic-länk från mailet: klick → inloggad direkt (ingen mellansida).
-    Skapar admin om det är första gången (setup). Vid ogiltig/utgången länk
-    visas ett felmeddelande.
+    Länk från mailet. Loggar BARA in den webbläsare som begärde inloggningen
+    (samma session har pending_epost == adressen). Öppnas länken i en annan
+    dator/webbläsare nekas den — då saknas bindningen i sessionen.
     """
     epost = hitta_magic(token)
     if not epost:
-        return render_template("magic.html",
-                               fel="Länken är ogiltig eller har gått ut.")
+        return render_template("magic.html", fel=tr("lank_ogiltig"))
+    # Samma-webbläsare-koll: sessionen som klickar måste vara den som begärde.
+    if session.get("pending_epost") != epost:
+        return render_template("magic.html", fel=tr("lank_fel_annan"))
     PENDING.pop(epost, None)
     session.pop("pending_epost", None)
     if not finns_admin():
@@ -571,6 +550,12 @@ def enheter_sida():
     """VPN-enheter: skapa och lista (QR/installation). Flyttad från startsidan."""
     return render_template("enheter.html", devices=load_devices(),
                            endpoint=endpoint(), allowed=ALLOWED_IPS)
+
+
+@app.route("/om")
+def om_sida():
+    """Om-sida: beskriver hur säkerheten fungerar."""
+    return render_template("om.html")
 
 
 @app.route("/devices", methods=["POST"])

@@ -2,7 +2,7 @@
 <html lang="sv">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, interactive-widget=resizes-content">
 <title>SSH {{ user }}@{{ host }}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <style>
@@ -20,25 +20,40 @@
   button{border:0;border-radius:9px;padding:.7rem 1rem;background:#3fb6ff;
     color:#04121f;font-weight:600;cursor:pointer;font-size:.95rem}
   #session{display:none;height:100%;flex-direction:column}
-  #bar{padding:.5rem .8rem;display:flex;gap:.5rem;align-items:center;
-    border-bottom:1px solid #26303d;position:relative}
-  #bar .host{font-family:ui-monospace,monospace;color:#3fb6ff;font-size:.9rem;flex:1}
-  #bar .ghost{background:transparent;border:1px solid #26303d;color:#e6edf3;
-    padding:.35rem .7rem;font-weight:500;font-size:.85rem}
-  #bar .ghost.pa{background:#3fb6ff;color:#04121f;border-color:#3fb6ff}
-  #meny{position:absolute;right:.8rem;top:2.6rem;background:#161b22;border:1px solid #26303d;
+  /* Allt sitter längst ned: kontrollrad (host + Filer/meny) + tangentrad */
+  #botten{flex:0 0 auto;position:relative;border-top:1px solid #26303d;background:#0d1117;
+    padding-bottom:env(safe-area-inset-bottom)}
+  #ctrl{padding:.4rem .6rem;display:flex;gap:.5rem;align-items:center}
+  #ctrl .host{font-family:ui-monospace,monospace;color:#3fb6ff;font-size:.82rem;
+    flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #ctrl .ghost{flex:0 0 auto;background:transparent;border:1px solid #26303d;color:#e6edf3;
+    padding:.4rem .7rem;font-weight:500;font-size:.82rem;border-radius:8px}
+  #ctrl .ghost.pa{background:#3fb6ff;color:#04121f;border-color:#3fb6ff}
+  /* Tangentrad längst ned — ligger kvar ovanför tangentbordet */
+  #tbar{flex:0 0 auto;display:flex;gap:.35rem;align-items:center;overflow-x:auto;
+    padding:.4rem .5rem;border-top:1px solid #26303d;background:#0d1117}
+  #tbar::-webkit-scrollbar{height:0}
+  #tbar .k{flex:0 0 auto;background:#161b22;border:1px solid #26303d;color:#e6edf3;
+    font-family:ui-monospace,monospace;font-size:.85rem;padding:.5rem .7rem;
+    border-radius:8px;min-width:2.2rem;line-height:1}
+  #tbar .k.pa{background:#3fb6ff;color:#04121f;border-color:#3fb6ff}
+  #tbar .sep{flex:0 0 auto;width:1px;align-self:stretch;background:#26303d;margin:.15rem .1rem}
+  #meny{position:absolute;right:.8rem;bottom:100%;margin-bottom:.3rem;background:#161b22;border:1px solid #26303d;
     border-radius:10px;min-width:220px;padding:.4rem;display:none;z-index:5}
   #meny .rad{padding:.5rem .6rem;border-radius:7px;cursor:pointer;font-size:.85rem;
     font-family:ui-monospace,monospace;display:flex;justify-content:space-between}
   #meny .rad:hover{background:#0d1117}
   #meny .ny{color:#3fb6ff;font-family:system-ui;border-top:1px solid #26303d;margin-top:.3rem;padding-top:.6rem}
+  #inst{position:absolute;right:.8rem;bottom:100%;margin-bottom:.3rem;background:#161b22;border:1px solid #26303d;
+    border-radius:10px;padding:.7rem;display:none;z-index:6;min-width:210px}
+  #inst .grp{font-size:.72rem;color:#8b949e;margin:0 0 .4rem;text-transform:uppercase;letter-spacing:.04em}
+  #inst .seg{display:flex;gap:.3rem;margin-bottom:.7rem}
+  #inst .seg button{flex:1;background:#0d1117;border:1px solid #26303d;color:#e6edf3;
+    padding:.4rem;border-radius:7px;font-size:.8rem}
+  #inst .seg button.pa{background:#3fb6ff;color:#04121f;border-color:#3fb6ff}
+  #inst .chk{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:#e6edf3;cursor:pointer}
   #mitt{flex:1;min-height:0;position:relative}
   #term{position:absolute;inset:0}
-  #tbar{display:flex;gap:.3rem;overflow-x:auto;padding:.4rem .5rem;
-    border-top:1px solid #26303d;background:#0d1117}
-  #tbar button{flex:0 0 auto;background:#161b22;border:1px solid #26303d;color:#e6edf3;
-    font-family:ui-monospace,monospace;font-size:.85rem;padding:.5rem .7rem;min-width:2.4rem;border-radius:8px}
-  #tbar button.pa{background:#3fb6ff;color:#04121f;border-color:#3fb6ff}
   /* Filpanel (dubbelpanel: lokal | fjärr) */
   #filpanel{position:absolute;inset:0;background:#0d1117;display:none;
     grid-template-columns:1fr 1fr;gap:1px;background:#26303d}
@@ -71,12 +86,6 @@
 </div>
 
 <div id="session">
-  <div id="bar">
-    <span class="host">{{ user }}@{{ host }}:{{ port }}</span>
-    <button class="ghost" id="filknapp">Filer</button>
-    <button class="ghost" id="menyknapp">Anslutningar ▾</button>
-    <div id="meny"></div>
-  </div>
   <div id="mitt">
     <div id="term"></div>
     <div id="filpanel">
@@ -94,19 +103,24 @@
       </div>
     </div>
   </div>
-  <div id="tbar">
-    <button data-seq="\x1b">Esc</button>
-    <button data-seq="\t">Tab</button>
-    <button id="kCtrl">Ctrl</button>
-    <button data-seq="\x1b[A">↑</button>
-    <button data-seq="\x1b[B">↓</button>
-    <button data-seq="\x1b[D">←</button>
-    <button data-seq="\x1b[C">→</button>
-    <button data-seq="\x03">^C</button>
-    <button data-txt="|">|</button>
-    <button data-txt="/">/</button>
-    <button data-txt="~">~</button>
-    <button data-txt="-">-</button>
+  <div id="botten">
+    <div id="ctrl">
+      <span class="host">{{ user }}@{{ host }}</span>
+      <button class="ghost" id="filknapp">Filer</button>
+      <button class="ghost" id="instknapp" title="Snabbtangenter">⚙</button>
+      <button class="ghost" id="menyknapp">≡</button>
+    </div>
+    <div id="tbar"></div>
+    <div id="meny"></div>
+    <div id="inst">
+      <div class="grp">Snabbtangenter</div>
+      <div class="seg" id="segTang">
+        <button data-val="claude">Claude</button>
+        <button data-val="cli">CLI</button>
+        <button data-val="bada">Båda</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="chkFiler"> Visa Filer-knapp</label>
+    </div>
   </div>
 </div>
 
@@ -115,17 +129,9 @@
 <script>
 const HOST = {{ host|tojson }}, USER = {{ user|tojson }}, PORT = {{ port|tojson }};
 const NYCKEL = 'tunnelo_ssh';
-let sock = null, term = null, fit = null, ctrlAktiv = false, aktivtAuth = null;
+let sock = null, term = null, fit = null, aktivtAuth = null;
 
 function skicka(d){ if(sock && sock.readyState === 1) sock.send(d); if(term) term.focus(); }
-function hanteraInput(d){
-  if(ctrlAktiv){
-    ctrlAktiv = false; document.getElementById('kCtrl').classList.remove('pa');
-    if(d.length === 1){ const k = d.toUpperCase().charCodeAt(0);
-      if(k >= 64 && k <= 95){ skicka(String.fromCharCode(k & 0x1f)); return; } }
-  }
-  skicka(d);
-}
 
 function anslutMed(auth){
   aktivtAuth = auth;
@@ -140,7 +146,7 @@ function anslutMed(auth){
     {host:HOST, port:PORT, user:USER, cols:term.cols, rows:term.rows}, auth))); term.focus(); };
   sock.onmessage = (ev) => term.write(ev.data);
   sock.onclose = () => term.write('\r\n\x1b[33m[frånkopplad]\x1b[0m\r\n');
-  term.onData(hanteraInput);
+  term.onData(skicka);
   window.addEventListener('resize', () => { if(fit) fit.fit(); });
 }
 function anslut(){ anslutMed({password: document.getElementById('password').value}); }
@@ -153,11 +159,80 @@ document.getElementById('password').addEventListener('keydown', (e) => { if(e.ke
   else if(m && m.losen) anslutMed({password:m.losen});
 })();
 
-// Tangentbordsrad
-document.getElementById('kCtrl').addEventListener('click', () => {
-  ctrlAktiv = !ctrlAktiv; document.getElementById('kCtrl').classList.toggle('pa', ctrlAktiv); if(term) term.focus(); });
-document.querySelectorAll('#tbar button[data-seq]').forEach(b => b.addEventListener('click', () => skicka(b.dataset.seq)));
-document.querySelectorAll('#tbar button[data-txt]').forEach(b => b.addEventListener('click', () => skicka(b.dataset.txt)));
+// Bottenrad med snabbtangenter. Riktiga escape-sekvenser (JS-strängar så \x tolkas).
+// Ctrl+bokstav = teckenkod & 0x1f (t.ex. Ctrl+C = \x03, Ctrl+L = \x0c).
+const SEKV = {
+  stab:'\x1b[Z', esc:'\x1b', ee:'\x1b\x1b', tab:'\t',
+  up:'\x1b[A', down:'\x1b[B', left:'\x1b[D', right:'\x1b[C', ret:'\r',
+  cc:'\x03', cd:'\x04', cr:'\x12', cl:'\x0c', cz:'\x1a',
+  ca:'\x01', ce:'\x05', ck:'\x0b', cu:'\x15', cw:'\x17'
+};
+// Tangentuppsättningar. {k:...} = sekvens ovan, {x:...} = råtecken, {s:1} = avdelare.
+const CLAUDE = [
+  {k:'stab',l:'⇧Tab',t:'Shift+Tab – växla läge (plan/auto)'},
+  {k:'esc',l:'Esc',t:'Esc – avbryt'}, {k:'ee',l:'Esc·Esc',t:'Ångra/redigera förra'},
+  {k:'up',l:'↑',t:'Historik upp'}, {k:'down',l:'↓',t:'Historik ned'},
+  {k:'tab',l:'Tab',t:'Komplettera filväg'}, {x:'@',l:'@',t:'Nämn fil'},
+  {k:'cc',l:'^C',t:'Ctrl+C'}, {k:'cr',l:'^R',t:'Visa mer utdata'},
+  {s:1}, {x:'/',l:'/',t:'Slash-kommando'},
+  {k:'left',l:'←'}, {k:'right',l:'→'}, {k:'ret',l:'⏎'}
+];
+const CLI = [
+  {k:'esc',l:'Esc'}, {k:'tab',l:'Tab'},
+  {k:'up',l:'↑'}, {k:'down',l:'↓'}, {k:'left',l:'←'}, {k:'right',l:'→'},
+  {s:1}, {k:'cc',l:'^C',t:'Avbryt'}, {k:'cd',l:'^D',t:'EOF/avsluta'},
+  {k:'cl',l:'^L',t:'Rensa skärm'}, {k:'cr',l:'^R',t:'Sök historik'},
+  {k:'cz',l:'^Z',t:'Pausa'}, {k:'ca',l:'^A',t:'Radbörjan'}, {k:'ce',l:'^E',t:'Radslut'},
+  {k:'ck',l:'^K',t:'Radera till slut'}, {k:'cu',l:'^U',t:'Radera till början'},
+  {k:'cw',l:'^W',t:'Radera ord'}, {s:1},
+  {x:'|',l:'|'}, {x:'~',l:'~'}, {x:'-',l:'-'}, {k:'ret',l:'⏎'}
+];
+// "Båda" = Claude + de CLI-tangenter som inte redan finns.
+const BADA = CLAUDE.concat([{s:1}], CLI.filter(d => d.k && !CLAUDE.some(c => c.k===d.k) && !['ret'].includes(d.k)),
+                           CLI.filter(d => d.x));
+const UPPSATTN = {claude:CLAUDE, cli:CLI, bada:BADA};
+
+// Inställningar (per webbläsare, sparas i localStorage)
+const INST_NYCKEL = 'tunnelo_term_inst';
+function lasInst(){ try { return JSON.parse(localStorage.getItem(INST_NYCKEL)) || {}; } catch(e){ return {}; } }
+function sparaInst(o){ localStorage.setItem(INST_NYCKEL, JSON.stringify(o)); }
+let inst = Object.assign({tangenter:'claude', filer:true}, lasInst());
+
+function ritaTbar(){
+  const tbar = document.getElementById('tbar'); tbar.innerHTML = '';
+  (UPPSATTN[inst.tangenter] || CLAUDE).forEach(d => {
+    if(d.s){ const s=document.createElement('span'); s.className='sep'; tbar.appendChild(s); return; }
+    const b = document.createElement('button'); b.className='k'; b.textContent = d.l;
+    if(d.t) b.title = d.t;
+    b.addEventListener('click', () => skicka(d.k ? SEKV[d.k] : d.x));
+    b.addEventListener('mousedown', e => e.preventDefault()); // behåll fokus i terminalen
+    tbar.appendChild(b);
+  });
+}
+function tillampaInst(){
+  document.getElementById('filknapp').style.display = inst.filer ? '' : 'none';
+  document.querySelectorAll('#segTang button').forEach(b =>
+    b.classList.toggle('pa', b.dataset.val === inst.tangenter));
+  document.getElementById('chkFiler').checked = inst.filer;
+  ritaTbar();
+  if(fit) fit.fit();
+}
+document.getElementById('instknapp').addEventListener('click', () => {
+  const p = document.getElementById('inst'); p.style.display = p.style.display==='block' ? 'none' : 'block';
+  document.getElementById('meny').style.display='none';
+});
+document.querySelectorAll('#segTang button').forEach(b => b.addEventListener('click', () => {
+  inst.tangenter = b.dataset.val; sparaInst(inst); tillampaInst();
+}));
+document.getElementById('chkFiler').addEventListener('change', e => {
+  inst.filer = e.target.checked; sparaInst(inst); tillampaInst();
+});
+tillampaInst();
+
+// Håll terminalen rätt storlek när mobilens tangentbord ändrar synlig yta
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', () => { if(fit) fit.fit(); });
+}
 
 // Anslutningar-meny
 function oppna(c){ const q = new URLSearchParams({host:c.host, user:c.user, port:c.port});

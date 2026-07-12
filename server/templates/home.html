@@ -3,6 +3,7 @@
 <div style="display:flex;flex-wrap:wrap;gap:.4rem;justify-content:flex-end">
   <a class="btn ghost" href="{{ url_for('enheter_sida') }}">{{ t('vpn_enheter') }}</a>
   {% if is_admin %}<a class="btn ghost" href="{{ url_for('users_sida') }}">{{ t('hantera_anvandare') }}</a>{% endif %}
+  <a class="btn ghost" href="{{ url_for('om_sida') }}">{{ t('om') }}</a>
   <a class="btn ghost" href="{{ url_for('logout') }}">{{ t('logga_ut') }}</a>
 </div>
 {% endblock %}

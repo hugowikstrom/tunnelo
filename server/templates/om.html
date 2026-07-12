@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block titel %} — {{ t('om') }}{% endblock %}
+{% block topphoger %}
+<a class="btn ghost" href="{{ url_for('home') }}">{{ t('tillbaka') }}</a>
+{% endblock %}
+{% block innehall %}
+
+{% if lang == 'en' %}
+<div class="card">
+  <h2>Security</h2>
+  <p class="muted" style="margin-top:0">How Tunnelo protects login and traffic.</p>
+
+  <h3 style="font-size:.95rem">Login</h3>
+  <ul>
+    <li><strong>Link, not a code.</strong> Only registered email addresses can log in. A one-time login link is emailed — valid 10 minutes, usable once.</li>
+    <li><strong>Same-browser binding.</strong> The link only logs in the browser that requested it (bound to the session). If someone else receives or clicks the link on another device, it is refused.</li>
+    <li><strong>Trusted device.</strong> After login a signed cookie is set (HttpOnly, Secure, SameSite=Lax, 1 year) so you don't log in every time. Revoke it with “Log out”.</li>
+  </ul>
+
+  <h3 style="font-size:.95rem">Transport &amp; network</h3>
+  <ul>
+    <li><strong>HTTPS everywhere.</strong> The portal runs behind Caddy with automatic TLS.</li>
+    <li><strong>Encrypted tunnels.</strong> The VPN uses WireGuard (ChaCha20-Poly1305).</li>
+    <li><strong>Per-user networks.</strong> Each user can be limited to specific IPs/subnets (AllowedIPs).</li>
+  </ul>
+
+  <h3 style="font-size:.95rem">SSH terminal</h3>
+  <ul>
+    <li>Passwords/keys are sent straight to the target server and are <strong>not stored on the portal server</strong>.</li>
+    <li>If you choose to <strong>save</strong> a connection's password, it is stored in your browser's localStorage in clear text — convenience vs. security, your choice. Prefer installing an SSH key (passwordless).</li>
+  </ul>
+
+  <h3 style="font-size:.95rem">Known limitations</h3>
+  <ul>
+    <li>No SSH host-key verification yet (small MITM risk on first connect on an untrusted network).</li>
+    <li>Saved SSH passwords in localStorage are clear text.</li>
+    <li>Without a verified email domain, mail is limited to the verified address.</li>
+  </ul>
+</div>
+{% else %}
+<div class="card">
+  <h2>Säkerhet</h2>
+  <p class="muted" style="margin-top:0">Så här skyddar Tunnelo inloggning och trafik.</p>
+
+  <h3 style="font-size:.95rem">Inloggning</h3>
+  <ul>
+    <li><strong>Länk, inte kod.</strong> Bara registrerade mailadresser kan logga in. En engångslänk mailas — giltig 10 minuter, kan bara användas en gång.</li>
+    <li><strong>Bunden till samma webbläsare.</strong> Länken loggar bara in den webbläsare som begärde den (bunden till sessionen). Får eller klickar någon annan länken på en annan dator nekas den.</li>
+    <li><strong>Betrodd enhet.</strong> Efter inloggning sätts en signerad cookie (HttpOnly, Secure, SameSite=Lax, 1 år) så du slipper logga in varje gång. Återkalla den med ”Logga ut”.</li>
+  </ul>
+
+  <h3 style="font-size:.95rem">Transport &amp; nät</h3>
+  <ul>
+    <li><strong>HTTPS överallt.</strong> Portalen körs bakom Caddy med automatisk TLS.</li>
+    <li><strong>Krypterade tunnlar.</strong> VPN:et använder WireGuard (ChaCha20-Poly1305).</li>
+    <li><strong>Nät per användare.</strong> Varje användare kan begränsas till vissa IP/nät (AllowedIPs).</li>
+  </ul>
+
+  <h3 style="font-size:.95rem">SSH-terminalen</h3>
+  <ul>
+    <li>Lösenord/nycklar skickas direkt till målservern och <strong>sparas inte på portalservern</strong>.</li>
+    <li>Väljer du att <strong>spara</strong> en anslutnings lösenord lagras det i webbläsarens localStorage i klartext — bekvämlighet vs. säkerhet, ditt val. Installera hellre en SSH-nyckel (lösenordsfritt).</li>
+  </ul>
+
+  <h3 style="font-size:.95rem">Kända begränsningar</h3>
+  <ul>
+    <li>Ingen verifiering av SSH-värdnyckel ännu (liten MITM-risk vid första anslutning på osäkert nät).</li>
+    <li>Sparade SSH-lösenord i localStorage är klartext.</li>
+    <li>Utan verifierad maildomän går mail bara till den verifierade adressen.</li>
+  </ul>
+</div>
+{% endif %}
+
+{% endblock %}

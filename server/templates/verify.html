@@ -1,18 +1,34 @@
 {% extends "base.html" %}
 {% block titel %} — {{ t('ange_kod') }}{% endblock %}
 {% block innehall %}
-<div class="card" style="max-width:340px;margin:1.5rem auto 0">
+<div class="card" style="max-width:360px;margin:1.5rem auto 0;text-align:center">
   <h2 style="margin-top:0">{% if setup %}{{ t('verifiera_admin') }}{% else %}{{ t('ange_kod') }}{% endif %}</h2>
-  <p class="muted" style="margin-top:0;font-size:.82rem">{{ t('kod_mailad') }} <strong>{{ epost }}</strong></p>
-  {% if fel %}<div class="fel">{{ fel }}</div>{% endif %}
-  <form method="post">
-    <input type="text" name="kod" autofocus inputmode="numeric"
-           autocomplete="one-time-code" placeholder="000000"
-           style="margin-bottom:.7rem;text-align:center;letter-spacing:.3em;font-size:1.2rem">
-    <button type="submit" style="width:100%">{{ t('logga_in') }}</button>
-  </form>
-  <p class="muted" style="margin:.7rem 0 0;font-size:.8rem;text-align:center">
+  <p class="muted" style="margin-top:0;font-size:.85rem">
+    {{ t('kod_mailad') }}<br><strong>{{ epost }}</strong></p>
+
+  {# Enkel snurra + status #}
+  <div style="margin:1.2rem 0">
+    <svg width="34" height="34" viewBox="0 0 50 50" style="animation:snurr 1s linear infinite">
+      <circle cx="25" cy="25" r="20" fill="none" stroke="var(--line)" stroke-width="5"/>
+      <path d="M25 5 a20 20 0 0 1 20 20" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <p class="muted" style="font-size:.85rem">{{ t('lank_oppna_samma') }}</p>
+  <p class="muted" id="vantar" style="font-size:.8rem;color:var(--dim)">{{ t('lank_vantar') }}</p>
+
+  <p class="muted" style="margin:.9rem 0 0;font-size:.8rem">
     <a href="{{ url_for('login') }}" style="color:var(--accent)">{{ t('annan_adress') }}</a>
   </p>
 </div>
+<style>@keyframes snurr{to{transform:rotate(360deg)}}</style>
+<script>
+// Pollar tills DENNA webbläsare blivit inloggad (via länken i mailet), gå sedan in.
+setInterval(async () => {
+  try {
+    const r = await fetch('/login-status', {cache:'no-store'});
+    const d = await r.json();
+    if (d.inloggad) location.href = '/';
+  } catch (e) {}
+}, 2000);
+</script>
 {% endblock %}
