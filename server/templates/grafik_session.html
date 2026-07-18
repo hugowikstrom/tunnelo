@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<title>Grafik — {{ user }}@{{ host }}</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#0d1117;color:#e6edf3;
+    font-family:system-ui,-apple-system,sans-serif;overflow:hidden}
+  #skarm{position:absolute;inset:0 0 44px 0;background:#000}
+  #skarm canvas{display:block}
+  #botten{position:absolute;left:0;right:0;bottom:0;height:44px;display:flex;align-items:center;
+    gap:.5rem;padding:0 .6rem;background:#161b22;border-top:1px solid #26303d;
+    padding-bottom:env(safe-area-inset-bottom)}
+  .host{font-family:ui-monospace,monospace;color:#3fb6ff;font-size:.82rem;margin-right:auto;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  button{background:transparent;border:1px solid #26303d;color:#e6edf3;border-radius:8px;
+    padding:.35rem .7rem;font-size:.85rem;cursor:pointer;flex:0 0 auto}
+  button:hover{background:#0d1117}
+  #status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:.6rem;color:#8b949e;font-size:.95rem;text-align:center;padding:1rem}
+  #login{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    flex-direction:column;gap:.7rem;padding:1rem}
+  #login input{background:#0d1117;border:1px solid #26303d;color:#e6edf3;border-radius:8px;
+    padding:.6rem;font-size:1rem;width:min(320px,80vw)}
+  #login button{background:#3fb6ff;color:#04121f;border-color:#3fb6ff;padding:.6rem 1rem}
+</style>
+</head>
+<body>
+<div id="skarm"></div>
+<div id="status">Ansluter till skrivbordet…</div>
+<div id="login">
+  <div>Lösenord för {{ user }}@{{ host }}</div>
+  <input type="password" id="losen" autocomplete="off">
+  <button id="loginknapp">Anslut</button>
+</div>
+<div id="botten">
+  <span class="host">{{ user }}@{{ host }} · grafik</span>
+  <button id="ctrlaltdel" title="Skicka Ctrl+Alt+Del">Ctrl+Alt+Del</button>
+  <button id="helskarm">Helskärm</button>
+  <button id="ateranslut">Återanslut</button>
+</div>
+
+<script type="module">
+import RFB from 'https://cdn.jsdelivr.net/npm/@novnc/novnc@1.4.0/core/rfb.js';
+
+const HOST = {{ host|tojson }}, USER = {{ user|tojson }}, PORT = {{ port|tojson }};
+const NYCKEL = 'tunnelo_ssh';
+const VNC_PORT = 5901;                 // VNC-server på målserverns localhost
+let rfb = null;
+
+const statusEl = document.getElementById('status');
+function visaStatus(t){ statusEl.textContent = t; statusEl.style.display = t ? 'flex' : 'none'; }
+
+// Hitta sparad anslutning för autentisering (från servern – sanningen)
+let MINA = [];
+async function hittaAuth(losen){
+  if(losen) return {password: losen};
+  if(!MINA.length){
+    try { const r = await fetch('/anslutningar'); const d = await r.json();
+      MINA = Array.isArray(d.anslutningar) ? d.anslutningar : []; } catch(e){}
+  }
+  const m = MINA.find(c => c.user===USER && c.host===HOST && String(c.port)===String(PORT));
+  if(m && m.pkey) return {private_key: m.pkey};
+  if(m && m.losen) return {password: m.losen};
+  return null;                          // saknas → fråga om lösenord
+}
+
+async function anslut(losen){
+  const auth = await hittaAuth(losen);
+  if(!auth){ document.getElementById('login').style.display = 'flex'; visaStatus(''); return; }
+  document.getElementById('login').style.display = 'none';
+  visaStatus('Ansluter till skrivbordet…');
+  // 1) Förbered: skicka uppgifter, få engångstoken (inga lösen i URL)
+  const body = Object.assign({host:HOST, user:USER, port:PORT, vnc_port:VNC_PORT}, auth);
+  let token;
+  try {
+    const r = await fetch('/grafik/prepare', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const d = await r.json();
+    if(!d.token) throw new Error(d.fel || 'kunde inte förbereda');
+    token = d.token;
+  } catch(e){ visaStatus('Fel: ' + e.message); return; }
+  // 2) noVNC ansluter binärt RFB via websocket-bryggan
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const url = `${proto}://${location.host}/grafik/ws?token=${encodeURIComponent(token)}`;
+  if(rfb){ try{ rfb.disconnect(); }catch(e){} rfb = null; }
+  rfb = new RFB(document.getElementById('skarm'), url, {});
+  rfb.scaleViewport = true;            // passa in bilden i fönstret
+  rfb.resizeSession = true;            // be servern anpassa upplösningen
+  rfb.addEventListener('connect', () => {
+    visaStatus('');
+    setTimeout(sparaTumnagel, 2500);     // fånga miniatyr när skrivbordet ritats
+  });
+  rfb.addEventListener('disconnect', (e) => {
+    visaStatus(e.detail && e.detail.clean ? 'Frånkopplad.' : 'Anslutningen bröts. Tryck Återanslut.');
+  });
+  rfb.addEventListener('securityfailure', () => visaStatus('Säkerhetsfel mot VNC-servern.'));
+}
+
+// Spara en liten skärmdump som FIL på hosten (belastar inte webbläsarlagringen)
+function sparaTumnagel(){
+  try {
+    const c = document.querySelector('#skarm canvas');
+    if(!c || !c.width) return;
+    const w = 160, h = Math.round(w * c.height / c.width);
+    const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h;
+    tmp.getContext('2d').drawImage(c, 0, 0, w, h);
+    const data = tmp.toDataURL('image/jpeg', 0.5);
+    fetch('/grafik/tumnagel', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id: USER + '@' + HOST + ':' + PORT, data})});
+  } catch(e){ /* tom canvas – strunta i miniatyren */ }
+}
+
+document.getElementById('loginknapp').addEventListener('click',
+  () => anslut(document.getElementById('losen').value));
+document.getElementById('losen').addEventListener('keydown',
+  (e) => { if(e.key==='Enter') anslut(document.getElementById('losen').value); });
+document.getElementById('ateranslut').addEventListener('click', () => anslut());
+document.getElementById('ctrlaltdel').addEventListener('click',
+  () => { if(rfb) rfb.sendCtrlAltDel(); });
+document.getElementById('helskarm').addEventListener('click', () => {
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+});
+
+anslut();
+</script>
+</body>
+</html>

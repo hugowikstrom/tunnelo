@@ -29,13 +29,26 @@
 </div>
 
 <div class="card tight">
-  <h2>{{ t('ny_anslutning') }}</h2>
+  <h2 id="formrubrik">{{ t('ny_anslutning') }}</h2>
   <form id="ny" class="term-form">
+    <input type="text" id="namn" placeholder="Namn (valfritt)" autocapitalize="none">
     <input type="text" id="host" value="localhost" autocapitalize="none">
     <input type="text" id="user" placeholder="root" autocapitalize="none">
     <input type="text" id="port" value="22" title="Port">
     <input type="password" id="losen" placeholder="{{ t('losen_ph') }}" autocomplete="off">
-    <button type="submit">{{ t('anslut_nytt_fonster') }}</button>
+    <input type="text" id="cmd" placeholder="Startkommando (valfritt) – t.ex. cd ~/projekt &amp;&amp; claude"
+           autocapitalize="none" autocomplete="off" style="flex:1 1 100%">
+    <select id="klient" title="Anslutningsmetod" style="flex:1 1 100%">
+      <option value="standard">Standard SSH – enkel session</option>
+      <option value="tmux">tmux – beständig, överlever frånkoppling</option>
+      <option value="screen">screen – beständig, överlever frånkoppling</option>
+      <option value="vnc">VNC – grafiskt skrivbord</option>
+    </select>
+    <label style="flex:1 1 100%;display:flex;align-items:center;gap:.4rem;font-size:.82rem;color:var(--dim)">
+      <input type="checkbox" id="mus" checked> Mus i tmux (scrolla historik, klicka paneler, markera)
+    </label>
+    <button type="submit" id="anslutknapp">{{ t('anslut_nytt_fonster') }}</button>
+    <button type="button" id="avbrytedit" class="btn ghost" style="display:none">Avbryt</button>
   </form>
 </div>
 
@@ -53,13 +66,58 @@
 
 <script>
 (function(){
-  const NYCKEL = 'tunnelo_ssh';
+  const NYCKEL = 'tunnelo_ssh';   // används bara för engångsmigrering av gammal data
   const T_TA_BORT = {{ t('ta_bort')|tojson }};
   const T_FAV = {{ t('favoriter')|tojson }};
   const T_AUTO = {{ t('auto_start')|tojson }};
-  const las = () => JSON.parse(localStorage.getItem(NYCKEL) || '[]');
-  const spara = (l) => localStorage.setItem(NYCKEL, JSON.stringify(l));
+
+  // SERVERN ÄR SANNINGEN. ANSL är en spegel i minnet av serverns lista.
+  let ANSL = [];
+  const las = () => ANSL;
+  // Hämta listan från servern → ANSL
+  async function ladda(){
+    try {
+      const r = await fetch('/anslutningar');
+      const d = await r.json();
+      ANSL = Array.isArray(d.anslutningar) ? d.anslutningar : [];
+    } catch(e){ /* behåll nuvarande ANSL vid nätfel */ }
+    return ANSL;
+  }
+  // Skriv listan till servern och spegla svaret (servern är sanning)
+  async function pusha(l){
+    ANSL = l; rita();                       // optimistiskt, direkt känsla
+    try {
+      const r = await fetch('/anslutningar', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({anslutningar: l})});
+      const d = await r.json();
+      if(Array.isArray(d.anslutningar)){ ANSL = d.anslutningar; rita(); }
+      else throw new Error('svar utan lista');
+    } catch(e){ await ladda(); rita(); alert('Kunde inte spara mot servern – listan lästes om.'); }
+  }
+  const spara = (l) => { pusha(l); };       // hela listan – bara för migrering
+
+  // Spara/uppdatera EN anslutning (servern infogar per id → inget kläms bort)
+  async function sparaEn(c){
+    ANSL = las().filter(x => idFor(x)!==idFor(c)).concat([c]); rita();   // optimistiskt
+    try {
+      const r = await fetch('/anslutningar/spara', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({anslutning: c})});
+      const d = await r.json();
+      if(Array.isArray(d.anslutningar)){ ANSL = d.anslutningar; rita(); }
+    } catch(e){ await ladda(); rita(); alert('Kunde inte spara mot servern.'); }
+  }
+  // Ta bort EN anslutning per id
+  async function taBort(id){
+    ANSL = las().filter(x => idFor(x)!==id); rita();                     // optimistiskt
+    try {
+      const r = await fetch('/anslutningar/ta-bort', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({id})});
+      const d = await r.json();
+      if(Array.isArray(d.anslutningar)){ ANSL = d.anslutningar; rita(); }
+    } catch(e){ await ladda(); rita(); }
+  }
   const idFor = (c) => `${c.user}@${c.host}:${c.port}`;
+  const escapeHtml = (s) => String(s).replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
   const params = (c) => new URLSearchParams({host:c.host, user:c.user, port:c.port}).toString();
 
   const stjarna = (p) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="${p?'currentColor':'none'}" stroke="currentColor" stroke-width="1.6"><path d="M12 2l3 6.9 7.6.6-5.8 5 1.8 7.4L12 18l-6.4 3.9 1.8-7.4-5.8-5 7.6-.6z"/></svg>`;
@@ -67,6 +125,9 @@
   const SOPTUNNA = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>`;
   const LAS = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
   const NYCKELSVG = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="17" r="3"/><path d="M9.5 14.5L20 4M16 4h4v4"/></svg>`;
+  const TERMSVG = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>`;
+  const PENNA = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>`;
+  const visaNamn = (c) => c.namn ? c.namn : idFor(c);
 
   function installNyckel(c){
     const pw = prompt(`Lösenord för ${idFor(c)} (engångs — för att lägga in SSH-nyckeln på servern):`);
@@ -75,8 +136,8 @@
       body: JSON.stringify({host:c.host, user:c.user, port:c.port, password:pw})})
       .then(r => r.json()).then(res => {
         if(res.private_key){
-          const l = las(); const t = l.find(x => idFor(x)===idFor(c));
-          if(t){ t.pkey = res.private_key; delete t.losen; spara(l); rita(); }
+          const t = las().find(x => idFor(x)===idFor(c));
+          if(t){ const post = Object.assign({}, t, {pkey: res.private_key}); delete post.losen; sparaEn(post); }
           alert('Klart! Framtida inloggningar sker med nyckel, utan lösenord.');
         } else { alert('Kunde inte installera nyckel: ' + (res.fel || 'okänt fel')); }
       }).catch(e => alert('Fel: ' + e));
@@ -90,21 +151,73 @@
   }
 
   function oppnaFonster(c){
-    return window.open('/terminal/session?' + params(c), '_blank', 'width=900,height=620');
+    // VNC öppnar det grafiska skrivbordet, annars vanlig terminal
+    const sida = c.klient === 'vnc' ? '/grafik/session?' : '/terminal/session?';
+    // Namngivet fönster per anslutning → återanvänds i stället för att dubbleras
+    const namn = 'tunnelo_' + idFor(c) + (c.klient === 'vnc' ? '_vnc' : '');
+    return window.open(sida + params(c), namn, 'width=1100,height=740');
   }
-  function oppna(c){
-    const l = las(); const t = l.find(x => idFor(x)===idFor(c));
-    if(t){ t.senast = Date.now(); if(c.losen) t.losen = c.losen; }
-    else { l.push({host:c.host, user:c.user, port:c.port, losen:c.losen||'',
-                   favorit:false, auto:false, senast:Date.now()}); }
-    spara(l); rita();
+  async function oppna(c){
+    const t = las().find(x => idFor(x)===idFor(c));
+    let post;
+    if(t){ post = Object.assign({}, t, {senast: Date.now()});
+           if(c.losen) post.losen = c.losen;
+           if(c.cmd !== undefined) post.cmd = c.cmd;
+           if(c.klient !== undefined) post.klient = c.klient;
+           if(c.mus !== undefined) post.mus = c.mus;
+           if(c.namn !== undefined && c.namn !== '') post.namn = c.namn; }
+    else { post = {namn:c.namn||'', host:c.host, user:c.user, port:c.port, losen:c.losen||'',
+                   cmd:c.cmd||'', klient:c.klient||'standard', mus:c.mus!==false,
+                   favorit:false, auto:false, senast:Date.now()}; }
+    await sparaEn(post);         // atomär spara innan fönstret öppnas
     oppnaFonster(c);
   }
 
   function toggle(c, falt){
-    const l = las(); const t = l.find(x => idFor(x)===idFor(c));
-    if(t){ t[falt] = !t[falt]; spara(l); rita(); }
+    const t = las().find(x => idFor(x)===idFor(c));
+    if(t){ const post = Object.assign({}, t); post[falt] = !post[falt]; sparaEn(post); }
   }
+
+  // Redigeringsläge: fyll formuläret med anslutningens värden
+  let redigerar = null;  // idFor för anslutningen som redigeras (eller null)
+  function redigera(c){
+    redigerar = idFor(c);
+    document.getElementById('namn').value = c.namn || '';
+    document.getElementById('host').value = c.host;
+    document.getElementById('user').value = c.user;
+    document.getElementById('port').value = c.port;
+    document.getElementById('losen').value = '';  // fyll bara i för att byta lösen
+    document.getElementById('cmd').value = c.cmd || '';
+    document.getElementById('klient').value = c.klient || 'standard';
+    document.getElementById('mus').checked = c.mus !== false;
+    anpassaFalt();
+    document.getElementById('formrubrik').textContent = 'Redigera anslutning';
+    document.getElementById('anslutknapp').textContent = 'Spara & anslut';
+    document.getElementById('avbrytedit').style.display = '';
+    document.getElementById('namn').focus();
+    document.getElementById('ny').scrollIntoView({behavior:'smooth', block:'center'});
+  }
+  function avslutaEdit(){
+    redigerar = null;
+    document.getElementById('ny').reset();
+    document.getElementById('host').value = 'localhost';
+    document.getElementById('port').value = '22';
+    document.getElementById('klient').value = 'standard';
+    document.getElementById('mus').checked = true;
+    anpassaFalt();
+    document.getElementById('formrubrik').textContent = {{ t('ny_anslutning')|tojson }};
+    document.getElementById('anslutknapp').textContent = {{ t('anslut_nytt_fonster')|tojson }};
+    document.getElementById('avbrytedit').style.display = 'none';
+  }
+  document.getElementById('avbrytedit').addEventListener('click', avslutaEdit);
+
+  // Dölj startkommando + mus när VNC valts (gäller bara terminal)
+  function anpassaFalt(){
+    const vnc = document.getElementById('klient').value === 'vnc';
+    document.getElementById('cmd').style.display = vnc ? 'none' : '';
+    document.getElementById('mus').closest('label').style.display = vnc ? 'none' : '';
+  }
+  document.getElementById('klient').addEventListener('change', anpassaFalt);
 
   function radEl(c){
     const rad = document.createElement('div');
@@ -113,56 +226,110 @@
     const nyckelKnapp = c.pkey
       ? `<button class="ikon pa nyckel" title="Nyckelinloggning aktiv — klicka för att glömma nyckeln">${NYCKELSVG}</button>`
       : `<button class="ikon nyckel" title="Installera SSH-nyckel (lösenordsfri inloggning)">${NYCKELSVG}</button>`;
+    const rader = [];
+    if(c.namn) rader.push(`<span style="font-family:ui-monospace,monospace;color:var(--dim);font-size:.72rem">${idFor(c)}</span>`);
+    if(c.cmd) rader.push(`<span style="font-family:ui-monospace,monospace;color:var(--accent);font-size:.72rem">$ ${escapeHtml(c.cmd)}</span>`);
+    const undertitel = rader.length ? `<div style="display:flex;flex-direction:column;gap:.1rem;margin-top:.15rem">${rader.join('')}</div>` : '';
+    // VNC: liten skärmdump från hosten (döljs automatiskt om ingen finns ännu)
+    const tumnagel = (c.klient==='vnc')
+      ? `<img class="tumnagel" src="/grafik/tumnagel?id=${encodeURIComponent(idFor(c))}"
+             onerror="this.style.display='none'" title="Öppna grafiskt skrivbord"
+             style="width:64px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--rand,#26303d);
+                    margin-right:.6rem;cursor:pointer;flex:0 0 auto">` : '';
     rad.innerHTML = `
-      <span class="namn">${idFor(c)}</span>
+      ${tumnagel}
+      <div class="namn" style="display:flex;flex-direction:column">
+        <span>${escapeHtml(visaNamn(c))}${c.klient && c.klient!=='standard' ? ` <span style="font-size:.62rem;background:var(--accent);color:#000;border-radius:.3rem;padding:.05rem .3rem;vertical-align:middle">${c.klient}</span>` : ''}</span>
+        ${undertitel}
+      </div>
       <span class="tid">${nar(c.senast)}</span>
       ${harLosen}
       ${nyckelKnapp}
+      <button class="ikon kmd ${c.cmd?'pa':''}" title="${c.cmd ? 'Startkommando: '+c.cmd : 'Sätt startkommando (körs vid anslutning)'}">${TERMSVG}</button>
+      <button class="ikon penna" title="Redigera anslutning">${PENNA}</button>
       <button class="ikon blixt ${c.auto?'pa':''}" title="${T_AUTO}">${blixt(c.auto)}</button>
       <button class="ikon stjarna ${c.favorit?'pa':''}" title="${T_FAV}">${stjarna(c.favorit)}</button>
       <button class="ikon bort" title="${T_TA_BORT}">${SOPTUNNA}</button>`;
     rad.querySelector('.namn').onclick = () => oppna(c);
+    const tn = rad.querySelector('.tumnagel'); if(tn) tn.onclick = () => oppna(c);
     if(c.losen && !c.pkey) rad.querySelector('.losen').onclick = () => {
-      const l = las(); const t = l.find(x => idFor(x)===idFor(c));
-      if(t){ delete t.losen; spara(l); rita(); }
+      const t = las().find(x => idFor(x)===idFor(c));
+      if(t){ const post = Object.assign({}, t); delete post.losen; sparaEn(post); }
     };
     rad.querySelector('.nyckel').onclick = () => {
-      if(c.pkey){ const l=las(); const t=l.find(x=>idFor(x)===idFor(c));
-                  if(t){ delete t.pkey; spara(l); rita(); } }
+      if(c.pkey){ const t = las().find(x=>idFor(x)===idFor(c));
+                  if(t){ const post = Object.assign({}, t); delete post.pkey; sparaEn(post); } }
       else installNyckel(c);
     };
+    rad.querySelector('.kmd').onclick = () => {
+      const val = prompt(`Startkommando för ${idFor(c)} (körs automatiskt vid anslutning). Lämna tomt för inget:`, c.cmd || '');
+      if(val === null) return;  // avbrutet
+      const t = las().find(x => idFor(x)===idFor(c));
+      if(t){ const post = Object.assign({}, t, {cmd: val.trim()}); sparaEn(post); }
+    };
+    rad.querySelector('.penna').onclick = () => redigera(c);
     rad.querySelector('.blixt').onclick = () => toggle(c, 'auto');
     rad.querySelector('.stjarna').onclick = () => toggle(c, 'favorit');
-    rad.querySelector('.bort').onclick = () => { spara(las().filter(x => idFor(x)!==idFor(c))); rita(); };
+    rad.querySelector('.bort').onclick = () => taBort(idFor(c));
     return rad;
   }
 
   function rita(){
     const conns = las();
     const fav = conns.filter(c => c.favorit).sort((a,b)=>(b.senast||0)-(a.senast||0));
-    const sen = [...conns].sort((a,b)=>(b.senast||0)-(a.senast||0)).slice(0,5);
+    const sen = [...conns].sort((a,b)=>(b.senast||0)-(a.senast||0));  // hela historiken
     const fl = document.getElementById('favlista'), sl = document.getElementById('senlista');
     fl.innerHTML = ''; sl.innerHTML = '';
     document.getElementById('favtom').style.display = fav.length ? 'none' : 'block';
     document.getElementById('sentom').style.display = sen.length ? 'none' : 'block';
-    fav.forEach(c => fl.appendChild(radEl(c)));
-    sen.forEach(c => sl.appendChild(radEl(c)));
+    // Per rad felsäkert: en trasig post får aldrig tömma hela listan
+    const trygg = (el, c) => { try { el.appendChild(radEl(c)); } catch(e){ console.warn('radEl-fel', c, e); } };
+    fav.forEach(c => trygg(fl, c));
+    sen.forEach(c => trygg(sl, c));
   }
 
   document.getElementById('ny').addEventListener('submit', (e) => {
     e.preventDefault();
-    const c = {host:document.getElementById('host').value.trim(),
+    const c = {namn:document.getElementById('namn').value.trim(),
+               host:document.getElementById('host').value.trim(),
                user:document.getElementById('user').value.trim(),
                port:(document.getElementById('port').value.trim() || '22'),
-               losen:document.getElementById('losen').value};
+               losen:document.getElementById('losen').value,
+               cmd:document.getElementById('cmd').value.trim(),
+               klient:document.getElementById('klient').value,
+               mus:document.getElementById('mus').checked};
     if(!c.host || !c.user) return;
-    oppna(c);
-    document.getElementById('losen').value = '';  // lämna inte kvar i fältet
+
+    if(redigerar){
+      // Byt ut den redigerade posten men behåll nyckel/favorit/auto/sparat lösen
+      const orig = las().find(x => idFor(x)===redigerar) || {};
+      const post = Object.assign({}, orig, {namn:c.namn, host:c.host, user:c.user,
+                                            port:c.port, cmd:c.cmd, klient:c.klient, mus:c.mus, senast:Date.now()});
+      if(c.losen) post.losen = c.losen;   // byt bara lösen om nytt angavs
+      const gammaltId = redigerar;
+      avslutaEdit();
+      (async () => {
+        if(gammaltId !== idFor(post)) await taBort(gammaltId);  // id ändrades → ta bort gamla
+        await sparaEn(post);
+        oppnaFonster(post);
+      })();
+    } else {
+      oppna(c);   // sparar konfigurationen och ansluter
+      avslutaEdit();
+    }
   });
 
   // Auto-start: öppna auto-markerade anslutningar direkt. Blockeras popup:en
   // (webbläsaren kräver ibland ett klick) visas en knapp istället.
   function koraAuto(){
+    // Kör inte autostart om vi just bytt språk (undvik att fönster öppnas igen)
+    if(location.hash === '#sprakbyte'){
+      history.replaceState(null, '', location.pathname + location.search);
+      return;
+    }
+    // Autostarta bara en gång per inloggning – inte när man surfar tillbaka hit
+    if(sessionStorage.getItem('tunnelo_autostartad')) return;
+    sessionStorage.setItem('tunnelo_autostartad', '1');
     const autos = las().filter(c => c.auto);
     if(!autos.length) return;
     let blockerad = false;
@@ -176,7 +343,33 @@
     }
   }
 
-  rita();
-  koraAuto();
+  // Engångsmigrering: har servern inget men webbläsaren har gamla lokala
+  // anslutningar → ladda upp dem till servern. Sedan används localStorage aldrig mer.
+  async function migreraGammalt(){
+    try {
+      const gamla = JSON.parse(localStorage.getItem(NYCKEL) || '[]');
+      if(Array.isArray(gamla) && gamla.length){
+        // Union EN gång så inget lokalt tappas i övergången till server-som-sanning
+        const karta = new Map();
+        [...ANSL, ...gamla].forEach(c => { const id = idFor(c); const f = karta.get(id);
+          if(!f || (c.senast || 0) >= (f.senast || 0)) karta.set(id, c); });
+        const merged = [...karta.values()];
+        merged.forEach(c => { delete c.tumnagel; });
+        if(merged.length !== ANSL.length) await pusha(merged);
+      }
+    } catch(e){}
+    // Rensa gammal lokal data – härefter är servern enda sanningen
+    localStorage.removeItem(NYCKEL);
+    Object.keys(localStorage).filter(k => k.startsWith('tunnelo_tn_'))
+      .forEach(k => localStorage.removeItem(k));
+  }
+
+  (async function start(){
+    await ladda();
+    await migreraGammalt();
+    rita();
+    koraAuto();
+    anpassaFalt();
+  })();
 })();
 </script>

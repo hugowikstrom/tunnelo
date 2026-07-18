@@ -10,5 +10,16 @@
            placeholder="{{ t('mailadress') }}" style="margin-bottom:.7rem">
     <button type="submit" style="width:100%">{{ t('skicka_kod') }}</button>
   </form>
+  {% if install_losen_finns %}
+  <div style="margin-top:1rem;border-top:1px solid var(--rand,#26303d);padding-top:1rem">
+    <p class="muted" style="margin:0 0 .5rem;font-size:.82rem">
+      {{ 'Or log in with the install password' if lang=='en' else 'Eller logga in med installationslösenord' }}</p>
+    <form method="post">
+      <input type="password" name="install_losen" autocomplete="off"
+             placeholder="{{ 'Install password' if lang=='en' else 'Installationslösenord' }}" style="margin-bottom:.7rem">
+      <button type="submit" class="ghost" style="width:100%">{{ t('logga_in') }}</button>
+    </form>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

@@ -25,3 +25,6 @@ server/*.log
 server/secret.key
 
 server/trusted.json
+tumnaglar/
+anslutningar.json
+konfig.json

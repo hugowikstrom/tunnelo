@@ -7,7 +7,7 @@ SPRAK = {"sv": "Svenska", "en": "English"}
 
 TEXTER = {
     "sv": {
-        "tagline": "privat VPN — koppla in dina enheter",
+        "tagline": "SSH & filer i webbläsaren",
         "tillbaka": "Tillbaka",
         "logga_ut": "Logga ut",
         "om": "Om",
@@ -68,7 +68,7 @@ TEXTER = {
         # terminal
         "ssh_anslutningar": "SSH-anslutningar",
         "ny_anslutning": "Ny anslutning",
-        "anslut_nytt_fonster": "Anslut (nytt fönster)",
+        "anslut_nytt_fonster": "Skapa ny session",
         "sparade_anslutningar": "Sparade anslutningar",
         "inga_sparade": "Inga sparade än — anslut ovan så frågar vi om du vill spara.",
         "favoriter": "Favoriter",
@@ -85,7 +85,7 @@ TEXTER = {
         "meny": "Meny",
     },
     "en": {
-        "tagline": "private VPN — connect your devices",
+        "tagline": "SSH & files in your browser",
         "tillbaka": "Back",
         "logga_ut": "Log out",
         "om": "About",
@@ -139,7 +139,7 @@ TEXTER = {
         "lank_mailad": "The install link was emailed to you.",
         "ssh_anslutningar": "SSH connections",
         "ny_anslutning": "New connection",
-        "anslut_nytt_fonster": "Connect (new window)",
+        "anslut_nytt_fonster": "Create new session",
         "sparade_anslutningar": "Saved connections",
         "inga_sparade": "None saved yet — connect above and we'll ask if you want to save it.",
         "favoriter": "Favorites",

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block titel %} — Hjälp{% endblock %}
+{% block topphoger %}
+<a class="btn ghost" href="{{ url_for('home') }}">{{ t('tillbaka') }}</a>
+{% endblock %}
+{% block innehall %}
+
+<div class="card">
+  <h2>Terminallägen</h2>
+  <p class="muted" style="margin-top:0">När du lägger till en anslutning väljer du <strong>läge</strong>.
+    Det styr hur skalet startas på servern.</p>
+  <ul>
+    <li><strong>Standard SSH</strong> — en enkel session. Enklast, men <em>tappas</em> om nätet
+      bryts (mobil låses, wifi↔4G). Bra för snabba engångskommandon.</li>
+    <li><strong>tmux</strong> — kör skalet i en <em>terminal-multiplexer</em> på servern.
+      Sessionen lever kvar även om du kopplas bort → du återansluter och är tillbaka exakt där
+      du var. Klarar flera fönster/paneler samtidigt. <strong>Rekommenderas</strong> för långa
+      jobb (t.ex. en Claude-session). Prefix-tangent: <code>Ctrl+b</code>.</li>
+    <li><strong>screen</strong> — samma idé som tmux, äldre verktyg. Använd om tmux saknas på
+      servern. Prefix-tangent: <code>Ctrl+a</code>.</li>
+  </ul>
+  <p class="muted" style="font-size:.82rem">Kräver att <code>tmux</code> resp. <code>screen</code>
+    finns på målservern (<code>sudo apt install tmux</code>).</p>
+</div>
+
+<div class="card">
+  <h2>SSH — 10 viktigaste</h2>
+  <p class="muted" style="margin-top:0">SSH (Secure Shell) = krypterad inloggning på en fjärrdator.
+    Detta kör du i terminalen.</p>
+  <table class="hjtab">
+    <tr><td><code>ls -la</code></td><td>Lista filer (även dolda) med detaljer</td></tr>
+    <tr><td><code>cd ~/mapp</code></td><td>Byt katalog (<code>~</code> = hemmakatalog)</td></tr>
+    <tr><td><code>pwd</code></td><td>Visa var du står (nuvarande sökväg)</td></tr>
+    <tr><td><code>nano fil.txt</code></td><td>Enkel texteditor (spara: Ctrl+O, avsluta: Ctrl+X)</td></tr>
+    <tr><td><code>cp / mv / rm</code></td><td>Kopiera / flytta / ta bort filer</td></tr>
+    <tr><td><code>sudo &lt;kmd&gt;</code></td><td>Kör som administratör (root)</td></tr>
+    <tr><td><code>top</code> / <code>htop</code></td><td>Visa processer och belastning live</td></tr>
+    <tr><td><code>df -h</code> / <code>free -h</code></td><td>Diskutrymme / minne (läsbart)</td></tr>
+    <tr><td><code>grep "ord" fil</code></td><td>Sök efter text i filer</td></tr>
+    <tr><td><code>Ctrl+C</code> / <code>Ctrl+L</code></td><td>Avbryt kommando / rensa skärmen</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>tmux — 10 viktigaste</h2>
+  <p class="muted" style="margin-top:0">Tryck först prefixet <code>Ctrl+b</code>, släpp, tryck sedan tangenten.
+    (Skrivs <code>Ctrl+b</code> <code>d</code>.)</p>
+  <table class="hjtab">
+    <tr><td><code>tmux new -s namn</code></td><td>Starta ny session med namn</td></tr>
+    <tr><td><code>tmux ls</code></td><td>Lista sessioner</td></tr>
+    <tr><td><code>tmux a -t namn</code></td><td>Återanslut till session</td></tr>
+    <tr><td><code>Ctrl+b</code> <code>d</code></td><td>Koppla från (sessionen lever vidare)</td></tr>
+    <tr><td><code>Ctrl+b</code> <code>c</code></td><td>Nytt fönster</td></tr>
+    <tr><td><code>Ctrl+b</code> <code>n</code> / <code>p</code></td><td>Nästa / föregående fönster</td></tr>
+    <tr><td><code>Ctrl+b</code> <code>%</code> / <code>"</code></td><td>Dela panel lodrätt / vågrätt</td></tr>
+    <tr><td><code>Ctrl+b</code> <code>piltangent</code></td><td>Hoppa mellan paneler</td></tr>
+    <tr><td><code>Ctrl+b</code> <code>[</code></td><td>Bläddra i historiken (q avslutar)</td></tr>
+    <tr><td><code>Ctrl+b</code> <code>x</code></td><td>Stäng panel</td></tr>
+  </table>
+  <p class="muted" style="font-size:.82rem">Tips: har du kryssat <em>Mus i tmux</em> kan du scrolla,
+    klicka paneler och markera med musen.</p>
+</div>
+
+<div class="card">
+  <h2>screen — 10 viktigaste</h2>
+  <p class="muted" style="margin-top:0">Prefixet är <code>Ctrl+a</code>.</p>
+  <table class="hjtab">
+    <tr><td><code>screen -S namn</code></td><td>Starta ny session med namn</td></tr>
+    <tr><td><code>screen -ls</code></td><td>Lista sessioner</td></tr>
+    <tr><td><code>screen -r namn</code></td><td>Återanslut till session</td></tr>
+    <tr><td><code>Ctrl+a</code> <code>d</code></td><td>Koppla från (lever vidare)</td></tr>
+    <tr><td><code>Ctrl+a</code> <code>c</code></td><td>Nytt fönster</td></tr>
+    <tr><td><code>Ctrl+a</code> <code>n</code> / <code>p</code></td><td>Nästa / föregående fönster</td></tr>
+    <tr><td><code>Ctrl+a</code> <code>"</code></td><td>Lista och välj fönster</td></tr>
+    <tr><td><code>Ctrl+a</code> <code>S</code></td><td>Dela skärmen vågrätt</td></tr>
+    <tr><td><code>Ctrl+a</code> <code>Tab</code></td><td>Hoppa mellan delar</td></tr>
+    <tr><td><code>Ctrl+a</code> <code>Esc</code></td><td>Bläddra i historiken</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Grafiskt skrivbord (VNC) — kortkommandon &amp; tips</h2>
+  <p class="muted" style="margin-top:0">Öppnas med <strong>Grafik</strong>-knappen i terminalen.
+    Skrivbordet (xfce) körs på servern och ritas i webbläsaren via noVNC — tunnlat inuti SSH.</p>
+  <table class="hjtab">
+    <tr><td><strong>Ctrl+Alt+Del</strong></td><td>Knappen längst ned skickar det till servern (inte din dator)</td></tr>
+    <tr><td><strong>Helskärm</strong></td><td>Knappen längst ned; <code>Esc</code> avslutar helskärm</td></tr>
+    <tr><td><strong>Återanslut</strong></td><td>Om bilden fryser/bryts — bygg upp sessionen igen</td></tr>
+    <tr><td><code>Högerklick</code></td><td>Fungerar som vanligt på skrivbordet</td></tr>
+    <tr><td><code>Skrollhjul</code></td><td>Skrollar i fönstret under muspekaren</td></tr>
+    <tr><td>Skalning</td><td>Bilden anpassas automatiskt till fönstrets storlek</td></tr>
+  </table>
+  <h3 style="font-size:.95rem">xfce-tips</h3>
+  <ul>
+    <li>Öppna en terminal i skrivbordet: <strong>Program → Terminalemulator</strong> (eller
+      högerklicka på skrivbordet → <em>Öppna terminal här</em>).</li>
+    <li>Starta ett grafiskt program från terminalen, t.ex. <code>xterm &amp;</code>,
+      <code>firefox &amp;</code> eller <code>thunar &amp;</code> (filhanterare).</li>
+    <li><code>&amp;</code> i slutet startar programmet i bakgrunden så prompten är kvar.</li>
+    <li>Klistra in text: markera i en app, mittenklick klistrar (X11-stil), eller använd
+      appens egna Ctrl+C/Ctrl+V inuti skrivbordet.</li>
+  </ul>
+  <p class="muted" style="font-size:.82rem">Kräver en VNC-server på målservern (vi använder
+    TigerVNC på <code>localhost:5901</code>).</p>
+</div>
+
+<div class="card">
+  <h2>Videoklipp</h2>
+  <p class="muted" style="margin-top:0">Bra genomgångar på YouTube (öppnar en sökning så länkarna
+    alltid fungerar):</p>
+  <ul>
+    <li><a href="https://www.youtube.com/results?search_query=ssh+tutorial+for+beginners" target="_blank" rel="noopener">SSH för nybörjare</a></li>
+    <li><a href="https://www.youtube.com/results?search_query=tmux+tutorial+for+beginners" target="_blank" rel="noopener">tmux — introduktion</a></li>
+    <li><a href="https://www.youtube.com/results?search_query=tmux+crash+course" target="_blank" rel="noopener">tmux — snabbkurs</a></li>
+    <li><a href="https://www.youtube.com/results?search_query=gnu+screen+tutorial" target="_blank" rel="noopener">GNU screen — introduktion</a></li>
+    <li><a href="https://www.youtube.com/results?search_query=vnc+remote+desktop+linux+tutorial" target="_blank" rel="noopener">VNC fjärrskrivbord på Linux</a></li>
+    <li><a href="https://www.youtube.com/results?search_query=linux+terminal+commands+for+beginners" target="_blank" rel="noopener">Linux-terminal — grundkommandon</a></li>
+  </ul>
+</div>
+
+<style>
+  .hjtab{width:100%;border-collapse:collapse;font-size:.88rem}
+  .hjtab td{padding:.4rem .5rem;border-top:1px solid #26303d;vertical-align:top}
+  .hjtab td:first-child{white-space:nowrap;width:1%}
+  .hjtab code{font-size:.82rem}
+</style>
+
+{% endblock %}

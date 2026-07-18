@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block titel %} — {{ 'Configuration' if lang=='en' else 'Konfiguration' }}{% endblock %}
+{% block topphoger %}
+<a class="btn ghost" href="{{ url_for('home') }}">{{ t('tillbaka') }}</a>
+{% endblock %}
+{% block innehall %}
+
+{% if meddelande %}<div class="card" style="background:#132a17;border-color:#1f5130">{{ meddelande }}</div>{% endif %}
+
+{% if install_satt and epost_ok %}
+<div class="card" style="background:#2a2413;border-color:#5a4d1f">
+  <strong>{{ 'Recommendation' if lang=='en' else 'Rekommendation' }}:</strong>
+  {{ 'Email works now — remove the install password so login only goes through email.'
+     if lang=='en' else
+     'E-posten fungerar nu — ta bort installationslösenordet så inloggning bara sker via e-post.' }}
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>{{ 'Install password' if lang=='en' else 'Installationslösenord' }}</h2>
+  <p class="muted" style="margin-top:0">
+    {{ 'A bootstrap password to log in before email is configured. Recommended to remove once email verification works.'
+       if lang=='en' else
+       'Ett bootstrap-lösenord för att logga in innan e-post är konfigurerad. Rekommenderas att tas bort när e-postverifieringen fungerar.' }}</p>
+  <p class="muted" style="font-size:.85rem">
+    {{ 'Status' if lang=='en' else 'Status' }}:
+    <strong>{{ ('set' if lang=='en' else 'satt') if install_satt else ('not set' if lang=='en' else 'ej satt') }}</strong>
+    · {{ 'email configured' if lang=='en' else 'e-post konfigurerad' }}:
+    <strong>{{ ('yes' if lang=='en' else 'ja') if epost_ok else ('no' if lang=='en' else 'nej') }}</strong></p>
+  <form method="post" style="margin-bottom:.5rem">
+    <input type="hidden" name="handling" value="install_satt">
+    <input type="password" name="install_losen" autocomplete="off"
+           placeholder="{{ 'New install password' if lang=='en' else 'Nytt installationslösenord' }}" style="margin-bottom:.6rem">
+    <button type="submit">{{ 'Save' if lang=='en' else 'Spara' }}</button>
+  </form>
+  {% if install_satt %}
+  <form method="post" onsubmit="return confirm('{{ 'Remove install password?' if lang=='en' else 'Ta bort installationslösenordet?' }}')">
+    <input type="hidden" name="handling" value="install_ta_bort">
+    <button type="submit" class="ghost">{{ 'Remove install password' if lang=='en' else 'Ta bort installationslösenordet' }}</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>{{ 'Keys' if lang=='en' else 'Nycklar' }}</h2>
+  <h3 style="font-size:.95rem;margin-bottom:.3rem">Resend API {{ 'key (email)' if lang=='en' else 'nyckel (e-post)' }}</h3>
+  <p class="muted" style="margin-top:0;font-size:.85rem">
+    {{ 'Current' if lang=='en' else 'Nuvarande' }}:
+    <code>{{ resend_maskad if resend_finns else ('none' if lang=='en' else 'ingen') }}</code></p>
+  <form method="post">
+    <input type="hidden" name="handling" value="resend">
+    <input type="password" name="resend_key" autocomplete="off"
+           placeholder="re_..." style="margin-bottom:.6rem">
+    <button type="submit">{{ 'Save key' if lang=='en' else 'Spara nyckel' }}</button>
+  </form>
+
+  <h3 style="font-size:.95rem;margin:1.2rem 0 .3rem">SMTP ({{ 'alternative to Resend' if lang=='en' else 'alternativ till Resend' }})</h3>
+  <p class="muted" style="margin-top:0;font-size:.85rem">
+    {{ 'Resend is used first if a key is set; otherwise SMTP.' if lang=='en' else 'Resend används först om nyckel finns; annars SMTP.' }}</p>
+  <form method="post">
+    <input type="hidden" name="handling" value="smtp">
+    <label>{{ 'Host' if lang=='en' else 'Värd' }}</label>
+    <input type="text" name="smtp_host" autocapitalize="none" value="{{ smtp_host }}" placeholder="smtp.exempel.se">
+    <label style="margin-top:.5rem">Port</label>
+    <input type="text" name="smtp_port" value="{{ smtp_port }}" placeholder="587">
+    <label style="margin-top:.5rem">{{ 'Username' if lang=='en' else 'Användarnamn' }}</label>
+    <input type="text" name="smtp_user" autocapitalize="none" value="{{ smtp_user }}" placeholder="du@exempel.se">
+    <label style="margin-top:.5rem">{{ 'Password' if lang=='en' else 'Lösenord' }}
+      {% if smtp_pass_maskad %}<span class="muted" style="font-size:.78rem">({{ 'current' if lang=='en' else 'nuvarande' }}: <code>{{ smtp_pass_maskad }}</code>)</span>{% endif %}</label>
+    <input type="password" name="smtp_pass" autocomplete="off"
+           placeholder="{{ 'leave empty to keep' if lang=='en' else 'lämna tomt för att behålla' }}">
+    <label style="margin-top:.5rem">{{ 'From address' if lang=='en' else 'Avsändaradress' }}</label>
+    <input type="text" name="mail_from" autocapitalize="none" value="{{ mail_from }}" placeholder="Tunnelo <du@exempel.se>">
+    <button type="submit" style="margin-top:.7rem">{{ 'Save SMTP' if lang=='en' else 'Spara SMTP' }}</button>
+  </form>
+</div>
+
+{% endblock %}

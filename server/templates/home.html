@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block topphoger %}
 <div style="display:flex;flex-wrap:wrap;gap:.4rem;justify-content:flex-end">
-  <a class="btn ghost" href="{{ url_for('enheter_sida') }}">{{ t('vpn_enheter') }}</a>
-  {% if is_admin %}<a class="btn ghost" href="{{ url_for('users_sida') }}">{{ t('hantera_anvandare') }}</a>{% endif %}
+  {% if is_admin %}<a class="btn ghost" href="{{ url_for('users_sida') }}">{{ t('hantera_anvandare') }}</a>
+  <a class="btn ghost" href="{{ url_for('config_sida') }}">{{ 'Configuration' if lang=='en' else 'Konfiguration' }}</a>{% endif %}
+  <a class="btn ghost" href="{{ url_for('hjalp_sida') }}">Hjälp</a>
   <a class="btn ghost" href="{{ url_for('om_sida') }}">{{ t('om') }}</a>
   <a class="btn ghost" href="{{ url_for('logout') }}">{{ t('logga_ut') }}</a>
 </div>

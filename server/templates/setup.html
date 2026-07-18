@@ -21,6 +21,12 @@
     <input type="text" id="epost" name="epost" autofocus
            autocapitalize="none" autocomplete="email" inputmode="email"
            placeholder="du@exempel.se">
+    <label for="install_losen" style="margin-top:.7rem">
+      {{ 'Install password (optional)' if lang=='en' else 'Installationslösenord (valfritt)' }}</label>
+    <input type="password" id="install_losen" name="install_losen" autocomplete="off"
+           placeholder="{{ 'Skip email — log in directly' if lang=='en' else 'Hoppa över mejl – logga in direkt' }}">
+    <p class="muted" style="font-size:.78rem;margin:.3rem 0 .7rem">
+      {{ 'Set this to get in without email while mail is not configured. Remove it from Configuration once email works.' if lang=='en' else 'Sätt detta för att komma in utan mejl innan e-post är konfigurerad. Ta bort det under Konfiguration när e-posten fungerar.' }}</p>
     <button type="submit">{{ t('skicka_kod') }}</button>
   </form>
 </div>

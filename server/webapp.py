@@ -29,6 +29,7 @@ import os
 import secrets
 import smtplib
 import socket
+import threading
 import time
 import urllib.request
 from datetime import timedelta
@@ -48,7 +49,7 @@ if os.path.exists(_envfil):
 
 import qrcode
 import qrcode.image.svg
-from flask import (Flask, Response, redirect, render_template, request,
+from flask import (Flask, Response, g, redirect, render_template, request,
                    session, url_for)
 from flask_sock import Sock
 
@@ -90,6 +91,11 @@ USERS_FIL = os.path.join(HAR, "users.json")
 # Betrodda enheter: en långlivad enhetsnyckel (cookie) → adress. Känd enhet
 # loggas in direkt utan mail. Vi lagrar bara hashen av nyckeln.
 TRUSTED_FIL = os.path.join(HAR, "trusted.json")
+# Sparade SSH/VNC-anslutningar per e-post → delas mellan alla som loggar in med
+# samma adress. Innehåller ev. sparade lösenord/nycklar → gitignoreras.
+ANSLUTNINGAR_FIL = os.path.join(HAR, "anslutningar.json")
+# Host-konfiguration: API-nycklar + installationslösenord. Känsligt → gitignoreras.
+KONFIG_FIL = os.path.join(HAR, "konfig.json")
 
 # Utskick av inloggningskoder. Prioritet: Resend (enklast) → SMTP → serverlogg.
 # Resend: skaffa en API-nyckel på resend.com, sätt TUNNELO_RESEND_KEY.
@@ -105,6 +111,7 @@ MAIL_FROM = (os.environ.get("TUNNELO_MAIL_FROM") or SMTP_FROM
              or "Tunnelo <onboarding@resend.dev>")
 
 KOD_GILTIGHET = 600  # sekunder en inloggningskod gäller (10 min)
+BETRODD_GILTIGHET = 30 * 24 * 3600  # betrodd enhet: 30 dagars inaktivitet → ny mail-inloggning
 # Väntande koder i minnet: email -> {"kod": "123456", "utgang": <tid>}
 PENDING = {}
 
@@ -128,6 +135,83 @@ def finns_admin():
     return any(u.get("admin") for u in las_anvandare().values())
 
 
+def las_anslutningar_alla():
+    """Alla sparade anslutningar: dict epost -> lista."""
+    if not os.path.exists(ANSLUTNINGAR_FIL):
+        return {}
+    with open(ANSLUTNINGAR_FIL) as f:
+        return json.load(f)
+
+
+def spara_anslutningar_alla(d):
+    with open(ANSLUTNINGAR_FIL, "w") as f:
+        json.dump(d, f, indent=2)
+
+
+# --- Host-konfiguration (nycklar + installationslösenord) --------------------
+def las_konfig():
+    if not os.path.exists(KONFIG_FIL):
+        return {}
+    with open(KONFIG_FIL) as f:
+        return json.load(f)
+
+
+def spara_konfig(d):
+    with open(KONFIG_FIL, "w") as f:
+        json.dump(d, f, indent=2)
+
+
+def aktiv_resend_key():
+    """Resend-nyckel: konfig.json först, annars miljövariabeln."""
+    return las_konfig().get("resend_key") or RESEND_KEY
+
+
+def aktiv_smtp():
+    """SMTP-inställningar: konfig.json först, annars miljövariabler."""
+    k = las_konfig()
+    return {
+        "host": k.get("smtp_host") or SMTP_HOST,
+        "port": int(k.get("smtp_port") or SMTP_PORT),
+        "user": k.get("smtp_user") or SMTP_USER,
+        "pass": k.get("smtp_pass") or SMTP_PASS,
+    }
+
+
+def aktiv_mail_from():
+    """Avsändaradress: konfig först, annars miljö/standard."""
+    return las_konfig().get("mail_from") or MAIL_FROM
+
+
+def epost_konfigurerad():
+    """Kan systemet skicka mejl (så e-postverifiering fungerar)?"""
+    return bool(aktiv_resend_key() or aktiv_smtp()["host"])
+
+
+def satt_install_losen(losen):
+    k = las_konfig()
+    if losen:
+        k["install_losen_hash"] = hashlib.sha256(losen.encode()).hexdigest()
+    else:
+        k.pop("install_losen_hash", None)
+    spara_konfig(k)
+
+
+def install_losen_satt():
+    return bool(las_konfig().get("install_losen_hash"))
+
+
+def kolla_install_losen(losen):
+    h = las_konfig().get("install_losen_hash")
+    return bool(h) and bool(losen) and hashlib.sha256(losen.encode()).hexdigest() == h
+
+
+def maska(v):
+    """Visa en nyckel delvis maskad: bara sista 4 tecknen synliga."""
+    if not v:
+        return ""
+    return ("•" * max(4, len(v) - 4)) + v[-4:] if len(v) > 4 else "••••"
+
+
 # --- Betrodda enheter --------------------------------------------------------
 def _hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
@@ -149,16 +233,30 @@ def betro_enhet(epost):
     """Skapa en enhetsnyckel, spara dess hash → adress, returnera nyckeln."""
     token = secrets.token_urlsafe(32)
     d = las_trusted()
-    d[_hash(token)] = {"epost": epost}
+    d[_hash(token)] = {"epost": epost, "senast": time.time()}
     spara_trusted(d)
     return token
 
 
 def trusted_epost(token):
-    """Adressen en betrodd enhetsnyckel hör till (eller None)."""
+    """Adressen en betrodd enhetsnyckel hör till (eller None).
+    Glidande 30-dagarsfönster: har enheten inte använts på 30 dagar tas den
+    bort och None returneras (då krävs ny mail-inloggning). Annars förnyas
+    tidsstämpeln så fönstret nollställs vid varje besök."""
     if not token:
         return None
-    return las_trusted().get(_hash(token), {}).get("epost")
+    d = las_trusted()
+    post = d.get(_hash(token))
+    if not post:
+        return None
+    nu = time.time()
+    if nu - post.get("senast", 0) > BETRODD_GILTIGHET:
+        d.pop(_hash(token), None)
+        spara_trusted(d)
+        return None
+    post["senast"] = nu  # förnya fönstret
+    spara_trusted(d)
+    return post.get("epost")
 
 
 def glom_enhet(token):
@@ -177,9 +275,9 @@ def generera_kod():
 
 def maila(till, amne, text):
     """Skicka mejl. Prioritet: Resend → SMTP → serverlogg (utvecklingsläge)."""
-    if RESEND_KEY:
+    if aktiv_resend_key():
         skicka_resend(till, amne, text)
-    elif SMTP_HOST:
+    elif aktiv_smtp()["host"]:
         skicka_smtp(till, amne, text)
     else:
         print(f"[DEV] Mail till {till}: {amne} :: {text[:80]}")
@@ -196,11 +294,11 @@ def skicka_lank_mail(epost, lank):
 def skicka_resend(till, amne, text):
     """Skicka mejl via Resends API (https://resend.com) — bara en API-nyckel."""
     data = json.dumps({
-        "from": MAIL_FROM, "to": [till], "subject": amne, "text": text,
+        "from": aktiv_mail_from(), "to": [till], "subject": amne, "text": text,
     }).encode()
     req = urllib.request.Request("https://api.resend.com/emails",
                                  data=data, method="POST")
-    req.add_header("Authorization", f"Bearer {RESEND_KEY}")
+    req.add_header("Authorization", f"Bearer {aktiv_resend_key()}")
     req.add_header("Content-Type", "application/json")
     # Resend ligger bakom Cloudflare som blockerar Python-urllibs standard-UA
     # (fel 1010) — sätt en egen User-Agent.
@@ -211,16 +309,17 @@ def skicka_resend(till, amne, text):
 
 def skicka_smtp(till, amne, text):
     """Skicka mejl via en vanlig SMTP-server."""
+    smtp = aktiv_smtp()
     msg = EmailMessage()
     msg["Subject"] = amne
-    msg["From"] = MAIL_FROM
+    msg["From"] = aktiv_mail_from()
     msg["To"] = till
     msg.set_content(text)
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
-        if SMTP_PORT in (587, 25):
+    with smtplib.SMTP(smtp["host"], smtp["port"]) as s:
+        if smtp["port"] in (587, 25):
             s.starttls()
-        if SMTP_USER:
-            s.login(SMTP_USER, SMTP_PASS)
+        if smtp["user"]:
+            s.login(smtp["user"], smtp["pass"])
         s.send_message(msg)
 
 
@@ -322,7 +421,9 @@ def byt_sprak(lang):
     if lang in sprak.SPRAK:
         session["lang"] = lang
         session.permanent = True
-    return redirect(request.referrer or url_for("home"))
+    # #sprakbyte-fragment: talar om för sidan att inte köra autostart igen
+    mal = (request.referrer or url_for("home")).split("#")[0]
+    return redirect(mal + "#sprakbyte")
 
 
 # --- Auth ---------------------------------------------------------------------
@@ -361,11 +462,11 @@ def logga_in(epost, admin):
 
 
 def svara_inloggad(epost, admin):
-    """Logga in, gör enheten betrodd (1-års cookie) och gå till startsidan."""
+    """Logga in, gör enheten betrodd (30-dagars glidande cookie) och gå till startsidan."""
     logga_in(epost, admin)
     token = betro_enhet(epost)
     resp = redirect(url_for("home"))
-    resp.set_cookie("tunnelo_device", token, max_age=31536000,
+    resp.set_cookie("tunnelo_device", token, max_age=BETRODD_GILTIGHET,
                     httponly=True, secure=True, samesite="Lax")
     return resp
 
@@ -388,11 +489,23 @@ def krav_login():
         return
     if not inloggad():
         # Känd enhet? Logga in direkt utan mail.
-        ep = trusted_epost(request.cookies.get("tunnelo_device"))
+        device = request.cookies.get("tunnelo_device")
+        ep = trusted_epost(device)
         if ep and ep in las_anvandare():
             logga_in(ep, las_anvandare()[ep].get("admin", False))
+            g.fornya_device = device  # förnya cookiens 30-dagarsfönster
             return
         return redirect(url_for("login"))
+
+
+@app.after_request
+def fornya_device_cookie(resp):
+    """Skjut fram enhets-cookiens utgång vid varje besök (glidande 30 dagar)."""
+    token = getattr(g, "fornya_device", None)
+    if token:
+        resp.set_cookie("tunnelo_device", token, max_age=BETRODD_GILTIGHET,
+                        httponly=True, secure=True, samesite="Lax")
+    return resp
 
 
 # --- Setup (första gången: skapa admin) --------------------------------------
@@ -404,10 +517,19 @@ def setup():
     fel = None
     if request.method == "POST":
         epost = request.form.get("epost", "").strip().lower()
-        if "@" in epost:
+        install_losen = request.form.get("install_losen", "")
+        if "@" not in epost:
+            fel = "Ange en giltig mailadress."
+        elif install_losen:
+            # Bootstrap: skapa admin direkt med installationslösenord (ingen mejl behövs)
+            users = las_anvandare()
+            users[epost] = {"epost": epost, "admin": True, "allowed_ips": hub.NET_CIDR}
+            spara_anvandare(users)
+            satt_install_losen(install_losen)
+            return svara_inloggad(epost, True)
+        else:
             skicka_ny_lank(epost)
             return redirect(url_for("setup_verify"))
-        fel = "Ange en giltig mailadress."
     return render_template("setup.html", fel=fel)
 
 
@@ -428,12 +550,22 @@ def login():
     """Steg 1: mata in mailadress. Finns den som användare mailas en länk."""
     fel = None
     if request.method == "POST":
-        epost = request.form.get("epost", "").strip().lower()
-        if epost in las_anvandare():
-            skicka_ny_lank(epost)
-            return redirect(url_for("verify"))
-        fel = "Adressen är inte registrerad i tvåstegsverifieringen."
-    return render_template("login.html", fel=fel)
+        install_losen = request.form.get("install_losen", "")
+        if install_losen:
+            # Installationslösenord = första verifiering i stället för e-post
+            if kolla_install_losen(install_losen):
+                admins = [u for u in las_anvandare().values() if u.get("admin")]
+                if admins:
+                    return svara_inloggad(admins[0]["epost"], True)
+            fel = "Fel installationslösenord."
+        else:
+            epost = request.form.get("epost", "").strip().lower()
+            if epost in las_anvandare():
+                skicka_ny_lank(epost)
+                return redirect(url_for("verify"))
+            fel = "Adressen är inte registrerad i tvåstegsverifieringen."
+    return render_template("login.html", fel=fel,
+                           install_losen_finns=install_losen_satt())
 
 
 @app.route("/verify")
@@ -485,6 +617,51 @@ def logout():
     resp = redirect(url_for("login"))
     resp.delete_cookie("tunnelo_device")
     return resp
+
+
+# --- Host-konfiguration (endast admin) ---------------------------------------
+@app.route("/config", methods=["GET", "POST"])
+def config_sida():
+    """Ange/visa nycklar (delvis maskade) + installationslösenord."""
+    if not ar_admin():
+        return redirect(url_for("home"))
+    k = las_konfig()
+    meddelande = None
+    if request.method == "POST":
+        handling = request.form.get("handling")
+        if handling == "resend":
+            ny = request.form.get("resend_key", "").strip()
+            if ny:
+                k["resend_key"] = ny
+                spara_konfig(k)
+                meddelande = "Resend-nyckel sparad."
+        elif handling == "install_satt":
+            satt_install_losen(request.form.get("install_losen", ""))
+            meddelande = "Installationslösenord uppdaterat."
+        elif handling == "install_ta_bort":
+            satt_install_losen(None)
+            meddelande = "Installationslösenord borttaget."
+        elif handling == "smtp":
+            for falt in ("smtp_host", "smtp_port", "smtp_user", "smtp_from", "mail_from"):
+                v = request.form.get(falt, "").strip()
+                if v:
+                    k[falt] = v
+            pw = request.form.get("smtp_pass", "")
+            if pw:
+                k["smtp_pass"] = pw
+            spara_konfig(k)
+            meddelande = "SMTP-inställningar sparade."
+        k = las_konfig()
+    smtp = aktiv_smtp()
+    return render_template(
+        "config.html", meddelande=meddelande,
+        resend_maskad=maska(k.get("resend_key") or RESEND_KEY or ""),
+        resend_finns=bool(k.get("resend_key") or RESEND_KEY),
+        smtp_host=smtp["host"] or "", smtp_port=smtp["port"],
+        smtp_user=smtp["user"] or "", smtp_pass_maskad=maska(smtp["pass"] or ""),
+        mail_from=aktiv_mail_from(),
+        install_satt=install_losen_satt(),
+        epost_ok=epost_konfigurerad())
 
 
 # --- Användarhantering (endast admin) ----------------------------------------
@@ -556,6 +733,12 @@ def enheter_sida():
 def om_sida():
     """Om-sida: beskriver hur säkerheten fungerar."""
     return render_template("om.html")
+
+
+@app.route("/hjalp")
+def hjalp_sida():
+    """Hjälp: terminallägen (SSH/tmux/screen) + viktigaste kommandon."""
+    return render_template("hjalp.html")
 
 
 @app.route("/devices", methods=["POST"])
@@ -754,7 +937,76 @@ def oppna_ssh(host, user, port=22, password=None, private_key=None, timeout=10):
     c.connect(host, port=int(port), username=user,
               password=None if pkey else password, pkey=pkey,
               timeout=timeout, look_for_keys=False, allow_agent=False)
+    # Skicka "jag-lever"-paket var 30:e sek så NAT/brandvägg inte slänger tunneln
+    tr = c.get_transport()
+    if tr:
+        tr.set_keepalive(30)
     return c
+
+
+# --- Whisper tal-till-text (push-to-talk i terminalen) -------------------
+_whisper_modell = None
+
+
+def _hamta_whisper():
+    """Ladda Whisper en gång (lat laddning). KB-Whisper (KBLab) är finetunad på
+    svenska → bäst svensk igenkänning. Fallback till 'base' om den inte kan laddas."""
+    global _whisper_modell
+    if _whisper_modell is None:
+        from faster_whisper import WhisperModel
+        tradar = max(4, (os.cpu_count() or 8) - 2)   # nästan alla kärnor
+        for namn in ("KBLab/kb-whisper-small", "base"):
+            try:
+                # local_files_only först (snabb laddning från cache), annars ladda ner
+                try:
+                    _whisper_modell = WhisperModel(namn, device="cpu", compute_type="int8",
+                                                   cpu_threads=tradar, local_files_only=True)
+                except Exception:
+                    _whisper_modell = WhisperModel(namn, device="cpu", compute_type="int8",
+                                                   cpu_threads=tradar)
+                break
+            except Exception as e:
+                print(f"[whisper] kunde inte ladda {namn}: {e}")
+    return _whisper_modell
+
+
+def _forladda_whisper():
+    """Ladda OCH värm upp modellen (CTranslate2 optimerar på första inferensen,
+    annars tar första riktiga anropet ~13 s). Körs i bakgrundstråd vid start."""
+    m = _hamta_whisper()
+    if m:
+        try:
+            import numpy as np
+            list(m.transcribe(np.zeros(16000, dtype=np.float32),
+                              language="sv", beam_size=5)[0])
+            print("[whisper] uppvärmd och redo")
+        except Exception as e:
+            print(f"[whisper] uppvärmning misslyckades: {e}")
+    return _whisper_modell
+
+
+@app.route("/stt", methods=["POST"])
+def stt():
+    """Ta emot en ljudinspelning och returnera transkriberad text (Whisper)."""
+    import tempfile
+    if not inloggad():
+        return {"fel": "ej inloggad"}, 403
+    fil = request.files.get("ljud")
+    if not fil:
+        return {"fel": "ingen ljudfil"}, 400
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=True) as tmp:
+        fil.save(tmp.name)
+        try:
+            modell = _hamta_whisper()
+            if modell is None:
+                return {"fel": "tal-till-text-modell kunde inte laddas"}, 500
+            # Svenska + beam_size=5 (noggrannare, klippen är korta), VAD klipper tystnad
+            segment, _ = modell.transcribe(tmp.name, language="sv",
+                                           beam_size=5, vad_filter=True)
+            text = " ".join(s.text.strip() for s in segment).strip()
+        except Exception as e:
+            return {"fel": str(e)}, 500
+    return {"text": text}
 
 
 @sock.route("/terminal/ws")
@@ -809,12 +1061,229 @@ def terminal_ws(ws):
             msg = ws.receive()
             if msg is None:
                 break
-            chan.send(msg)
+            if not msg:
+                continue
+            op, payload = msg[0], msg[1:]   # 1-teckens opcode-prefix
+            if op == "1":                    # resize: {cols, rows}
+                d = json.loads(payload)
+                chan.resize_pty(width=int(d["cols"]), height=int(d["rows"]))
+            elif op == "2":                  # ping (håll ws vaken) — ignorera
+                continue
+            else:                            # "0" = tangenttryck
+                chan.send(payload)
     except Exception:
         pass
     finally:
         chan.close()
         klient.close()
+
+
+# --- Grafisk session (noVNC tunnlad genom SSH) ---------------------------
+# Uppgifter POSTas till /grafik/prepare → engångstoken; noVNC ansluter sedan
+# till /grafik/ws?token=… så inga lösenord hamnar i URL:en.
+_grafik_pending = {}   # token -> {"auth": {...}, "tid": ...}
+
+
+@app.route("/grafik/prepare", methods=["POST"])
+def grafik_prepare():
+    """Ta emot anslutningsuppgifter, returnera en kortlivad engångstoken."""
+    import secrets
+    if not inloggad():
+        return {"fel": "ej inloggad"}, 403
+    d = request.get_json(force=True)
+    if not (d.get("host") and d.get("user")):
+        return {"fel": "host och user krävs"}, 400
+    token = secrets.token_urlsafe(24)
+    _grafik_pending[token] = {"auth": d, "tid": time.time()}
+    # Städa gamla tokens (äldre än 60 s)
+    for t in [k for k, v in _grafik_pending.items() if time.time() - v["tid"] > 60]:
+        _grafik_pending.pop(t, None)
+    return {"token": token}
+
+
+@app.route("/grafik/session")
+def grafik_session():
+    """Sidan som visar det grafiska skrivbordet (noVNC)."""
+    if not inloggad():
+        return redirect(url_for("login"))
+    return render_template("grafik_session.html",
+                           host=request.args.get("host", "localhost"),
+                           user=request.args.get("user", ""),
+                           port=request.args.get("port", "22"))
+
+
+# VNC-miniatyrer sparas som filer på hosten (inte i webbläsaren)
+TUMNAGEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tumnaglar")
+
+
+def _tumnagel_fil(ident):
+    """Säkert filnamn av user@host:port via hash."""
+    import hashlib
+    h = hashlib.sha1((ident or "").encode()).hexdigest()
+    return os.path.join(TUMNAGEL_DIR, h + ".jpg")
+
+
+@app.route("/grafik/tumnagel", methods=["POST"])
+def spara_tumnagel():
+    """Ta emot en skärmdump (dataURL) och spara som fil."""
+    import base64
+    if not inloggad():
+        return {"fel": "ej inloggad"}, 403
+    d = request.get_json(force=True)
+    ident, data = d.get("id"), d.get("data", "")
+    if not ident or "," not in data:
+        return {"fel": "ogiltig"}, 400
+    os.makedirs(TUMNAGEL_DIR, exist_ok=True)
+    with open(_tumnagel_fil(ident), "wb") as f:
+        f.write(base64.b64decode(data.split(",", 1)[1]))
+    return {"ok": True}
+
+
+@app.route("/grafik/tumnagel", methods=["GET"])
+def hamta_tumnagel():
+    """Servera en sparad miniatyr (404 om ingen finns)."""
+    if not inloggad():
+        return "", 403
+    fil = _tumnagel_fil(request.args.get("id", ""))
+    if not os.path.exists(fil):
+        return "", 404
+    with open(fil, "rb") as f:
+        return Response(f.read(), mimetype="image/jpeg")
+
+
+@app.route("/anslutningar", methods=["GET"])
+def hamta_anslutningar():
+    """Anslutningarna för den inloggade e-posten (delas mellan enheter)."""
+    if not inloggad():
+        return {"fel": "ej inloggad"}, 403
+    epost = session.get("epost", "")
+    return {"anslutningar": las_anslutningar_alla().get(epost, [])}
+
+
+@app.route("/anslutningar", methods=["POST"])
+def spara_anslutningar():
+    """Ersätt anslutningslistan för den inloggade e-posten."""
+    if not inloggad():
+        return {"fel": "ej inloggad"}, 403
+    epost = session.get("epost", "")
+    lista = request.get_json(force=True).get("anslutningar")
+    if not isinstance(lista, list):
+        return {"fel": "ogiltig"}, 400
+    alla = las_anslutningar_alla()
+    alla[epost] = lista
+    spara_anslutningar_alla(alla)
+    # Returnera den sparade listan → klienten speglar alltid servern (sanningen)
+    return {"anslutningar": lista}
+
+
+def _idfor(c):
+    return f"{c.get('user')}@{c.get('host')}:{c.get('port')}"
+
+
+@app.route("/anslutningar/spara", methods=["POST"])
+def anslutning_spara_en():
+    """Infoga/uppdatera EN anslutning (per id). Rör inte övriga → inget kläms bort.
+    Server-sidan är atomär: läs → ersätt/lägg till → skriv."""
+    if not inloggad():
+        return {"fel": "ej inloggad"}, 403
+    epost = session.get("epost", "")
+    c = request.get_json(force=True).get("anslutning")
+    if not isinstance(c, dict) or not (c.get("user") and c.get("host")):
+        return {"fel": "ogiltig"}, 400
+    alla = las_anslutningar_alla()
+    lista = [x for x in alla.get(epost, []) if _idfor(x) != _idfor(c)]
+    lista.append(c)
+    alla[epost] = lista
+    spara_anslutningar_alla(alla)
+    return {"anslutningar": lista}
+
+
+@app.route("/anslutningar/ta-bort", methods=["POST"])
+def anslutning_ta_bort():
+    """Ta bort EN anslutning per id. Övriga orörda."""
+    if not inloggad():
+        return {"fel": "ej inloggad"}, 403
+    epost = session.get("epost", "")
+    mid = request.get_json(force=True).get("id")
+    alla = las_anslutningar_alla()
+    lista = [x for x in alla.get(epost, []) if _idfor(x) != mid]
+    alla[epost] = lista
+    spara_anslutningar_alla(alla)
+    return {"anslutningar": lista}
+
+
+@sock.route("/grafik/ws")
+def grafik_ws(ws):
+    """Brygga: noVNC (binärt RFB) ↔ VNC-server.
+    localhost → direkt TCP till 127.0.0.1:port. Annan värd → tunnlad via SSH."""
+    import select
+    import socket as _socket
+    import threading
+    if not inloggad():
+        return
+    token = request.args.get("token", "")
+    post = _grafik_pending.pop(token, None)
+    if not post or time.time() - post["tid"] > 60:
+        return
+    init = post["auth"]
+    vnc_port = int(init.get("vnc_port", 5901))
+    host = (init.get("host") or "").lower()
+
+    klient = None
+    try:
+        if host in ("localhost", "127.0.0.1", "::1", ""):
+            # Portalen kör på samma maskin → anslut direkt, ingen SSH behövs
+            chan = _socket.create_connection(("127.0.0.1", vnc_port), timeout=10)
+        else:
+            # Fjärrvärd: tunnla VNC genom SSH (direct-tcpip till dess localhost)
+            klient = oppna_ssh(init["host"], init["user"], init.get("port", 22),
+                               password=init.get("password"),
+                               private_key=init.get("private_key"))
+            chan = klient.get_transport().open_channel(
+                "direct-tcpip", ("localhost", vnc_port), ("127.0.0.1", 0))
+    except Exception as e:
+        try:
+            ws.send(("VNC-fel: " + str(e)).encode())
+        except Exception:
+            pass
+        if klient:
+            klient.close()
+        return
+
+    def las_fran_vnc():
+        while True:
+            r, _, _ = select.select([chan], [], [], 1)
+            if chan in r:
+                try:
+                    data = chan.recv(32768)
+                except Exception:
+                    break
+                if not data:
+                    break
+                try:
+                    ws.send(data)          # binärt till noVNC
+                except Exception:
+                    break
+
+    t = threading.Thread(target=las_fran_vnc, daemon=True)
+    t.start()
+    try:
+        while True:
+            msg = ws.receive()
+            if msg is None:
+                break
+            if isinstance(msg, str):
+                msg = msg.encode()
+            chan.send(msg)
+    except Exception:
+        pass
+    finally:
+        try:
+            chan.close()
+        except Exception:
+            pass
+        if klient:
+            klient.close()
 
 
 @app.route("/ssh/setup-key", methods=["POST"])
@@ -930,5 +1399,7 @@ def sftp_upload():
 
 if __name__ == "__main__":
     hub.ensure_hub()  # se till att navet finns vid start
+    # Förladda Whisper i bakgrunden så första mik-tryckningen inte hänger
+    threading.Thread(target=_forladda_whisper, daemon=True).start()
     print(f"Tunnelo-portal på http://0.0.0.0:{WEBPORT}  (endpoint {endpoint()})")
-    app.run(host="0.0.0.0", port=WEBPORT)
+    app.run(host="0.0.0.0", port=WEBPORT, threaded=True)

@@ -20,30 +20,38 @@
   button{border:0;border-radius:9px;padding:.7rem 1rem;background:#3fb6ff;
     color:#04121f;font-weight:600;cursor:pointer;font-size:.95rem}
   #session{display:none;height:100%;flex-direction:column}
-  /* Allt sitter längst ned: kontrollrad (host + Filer/meny) + tangentrad */
+  /* Allt på EN rad längst ned: host + knappar + tangenter, horisontellt scrollbar */
   #botten{flex:0 0 auto;position:relative;border-top:1px solid #26303d;background:#0d1117;
     padding-bottom:env(safe-area-inset-bottom)}
-  #ctrl{padding:.4rem .6rem;display:flex;gap:.5rem;align-items:center}
+  #rad{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;padding:.4rem .5rem}
+  #ctrl{display:flex;gap:.5rem;align-items:center;flex:0 0 auto}
   #ctrl .host{font-family:ui-monospace,monospace;color:#3fb6ff;font-size:.82rem;
-    flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    flex:0 0 auto;max-width:11rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #ctrl .ghost{flex:0 0 auto;background:transparent;border:1px solid #26303d;color:#e6edf3;
-    padding:.4rem .7rem;font-weight:500;font-size:.82rem;border-radius:8px}
+    padding:.4rem .7rem;font-weight:500;font-size:.82rem;border-radius:8px;white-space:nowrap}
   #ctrl .ghost.pa{background:#3fb6ff;color:#04121f;border-color:#3fb6ff}
-  /* Tangentrad längst ned — ligger kvar ovanför tangentbordet */
-  #tbar{flex:0 0 auto;display:flex;gap:.35rem;align-items:center;overflow-x:auto;
-    padding:.4rem .5rem;border-top:1px solid #26303d;background:#0d1117}
-  #tbar::-webkit-scrollbar{height:0}
-  #tbar .k{flex:0 0 auto;background:#161b22;border:1px solid #26303d;color:#e6edf3;
+  /* Tangenterna – samma rad, direkt efter kontrollknapparna */
+  #pilar{flex:0 0 auto;display:flex;gap:.15rem;align-items:center}
+  /* display:contents → tangenterna flödar in i #rad och radbryts till fler rader */
+  #tbar{display:contents}
+  #tbar .k,#pilar .k{flex:0 0 auto;background:#161b22;border:1px solid #26303d;color:#e6edf3;
     font-family:ui-monospace,monospace;font-size:.85rem;padding:.5rem .7rem;
     border-radius:8px;min-width:2.2rem;line-height:1}
+  #pilar .k{padding:.5rem .55rem;min-width:2rem}
   #tbar .k.pa{background:#3fb6ff;color:#04121f;border-color:#3fb6ff}
-  #tbar .sep{flex:0 0 auto;width:1px;align-self:stretch;background:#26303d;margin:.15rem .1rem}
-  #meny{position:absolute;right:.8rem;bottom:100%;margin-bottom:.3rem;background:#161b22;border:1px solid #26303d;
-    border-radius:10px;min-width:220px;padding:.4rem;display:none;z-index:5}
+  #tbar .sep,#rad>.sep{flex:0 0 auto;width:1px;align-self:stretch;background:#26303d;margin:.35rem .1rem}
+  #meny{margin-bottom:.6rem}
   #meny .rad{padding:.5rem .6rem;border-radius:7px;cursor:pointer;font-size:.85rem;
     font-family:ui-monospace,monospace;display:flex;justify-content:space-between}
   #meny .rad:hover{background:#0d1117}
   #meny .ny{color:#3fb6ff;font-family:system-ui;border-top:1px solid #26303d;margin-top:.3rem;padding-top:.6rem}
+  #ctrl .ikonknapp{display:inline-flex;align-items:center;justify-content:center;padding:.35rem .5rem}
+  /* Spelar in = röd puls, transkriberar = snurrande blå ikon */
+  #mikknapp.rec{color:#ff5555;border-color:#ff5555;animation:mikpuls 1s ease-in-out infinite}
+  #mikknapp.busy{color:#3fb6ff;border-color:#3fb6ff}
+  #mikknapp.busy svg{animation:miksnurr .8s linear infinite;transform-origin:center}
+  @keyframes mikpuls{50%{opacity:.35}}
+  @keyframes miksnurr{to{transform:rotate(360deg)}}
   #inst{position:absolute;right:.8rem;bottom:100%;margin-bottom:.3rem;background:#161b22;border:1px solid #26303d;
     border-radius:10px;padding:.7rem;display:none;z-index:6;min-width:210px}
   #inst .grp{font-size:.72rem;color:#8b949e;margin:0 0 .4rem;text-transform:uppercase;letter-spacing:.04em}
@@ -104,22 +112,38 @@
     </div>
   </div>
   <div id="botten">
-    <div id="ctrl">
-      <span class="host">{{ user }}@{{ host }}</span>
-      <button class="ghost" id="filknapp">Filer</button>
-      <button class="ghost" id="instknapp" title="Snabbtangenter">⚙</button>
-      <button class="ghost" id="menyknapp">≡</button>
+    <div id="rad">
+      <div id="ctrl">
+        <button class="ghost ikonknapp" id="mikknapp" title="Håll inne och tala (Whisper tal-till-text)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
+        <button class="ghost ikonknapp" id="refreshknapp" title="Rita om skärmen (bra vid återanslutning)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>
+        </button>
+        <button class="ghost" id="instknapp" title="{{ 'Menu & settings' if lang=='en' else 'Meny & inställningar' }}">⚙</button>
+      </div>
+      <div id="pilar">
+        <button class="k" data-pil="up" title="↑">↑</button>
+        <button class="k" data-pil="down" title="↓">↓</button>
+        <button class="k" data-pil="left" title="←">←</button>
+        <button class="k" data-pil="right" title="→">→</button>
+      </div>
+      <span class="sep"></span>
+      <div id="tbar"></div>
+      <button class="ghost" id="filknapp" style="flex:0 0 auto">Filer</button>
     </div>
-    <div id="tbar"></div>
-    <div id="meny"></div>
     <div id="inst">
-      <div class="grp">Snabbtangenter</div>
-      <div class="seg" id="segTang">
+      <div class="grp" style="opacity:.7">{{ user }}@{{ host }}</div>
+      <div class="grp">{{ 'Connections' if lang=='en' else 'Anslutningar' }}</div>
+      <div id="meny"></div>
+      <div class="grp" style="margin-top:.6rem">{{ 'Shortcuts' if lang=='en' else 'Snabbtangenter' }}</div>
+      <div class="seg" id="segTang" style="flex-wrap:wrap">
         <button data-val="claude">Claude</button>
         <button data-val="cli">CLI</button>
-        <button data-val="bada">Båda</button>
+        <button data-val="tmux">tmux</button>
+        <button data-val="screen">screen</button>
       </div>
-      <label class="chk"><input type="checkbox" id="chkFiler"> Visa Filer-knapp</label>
+      <label class="chk"><input type="checkbox" id="chkFiler"> {{ 'Show Files button' if lang=='en' else 'Visa Filer-knapp' }}</label>
     </div>
   </div>
 </div>
@@ -128,10 +152,29 @@
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script>
 const HOST = {{ host|tojson }}, USER = {{ user|tojson }}, PORT = {{ port|tojson }};
+const LANG = {{ lang|tojson }};
+const tr = (sv, en) => LANG === 'en' ? en : sv;   // enkel tvåspråkighet
 const NYCKEL = 'tunnelo_ssh';
 let sock = null, term = null, fit = null, aktivtAuth = null;
+let startKommando = '', startSkickat = false;  // körs automatiskt vid anslutning
 
-function skicka(d){ if(sock && sock.readyState === 1) sock.send(d); if(term) term.focus(); }
+// Sparade anslutningar hämtas från servern (sanningen), inte localStorage
+let MINA = [];
+async function laddaMina(){
+  try { const r = await fetch('/anslutningar'); const d = await r.json();
+    MINA = Array.isArray(d.anslutningar) ? d.anslutningar : []; } catch(e){}
+  return MINA;
+}
+function minPost(){ return MINA.find(c => c.user===USER && c.host===HOST && String(c.port)===String(PORT)); }
+let avsiktligStang = false, aterBackoff = 1000;  // för auto-återanslutning
+
+// Opcode-prefix: '0'=tangenttryck, '1'=resize, '2'=ping
+function skicka(d){ if(sock && sock.readyState === 1) sock.send('0' + d); if(term) term.focus(); }
+function skickaResize(){
+  if(fit) fit.fit();
+  if(sock && sock.readyState === 1 && term)
+    sock.send('1' + JSON.stringify({cols:term.cols, rows:term.rows}));
+}
 
 function anslutMed(auth){
   aktivtAuth = auth;
@@ -140,24 +183,61 @@ function anslutMed(auth){
   term = new Terminal({fontSize:14, theme:{background:'#0d1117'}});
   fit = new FitAddon.FitAddon(); term.loadAddon(fit);
   term.open(document.getElementById('term')); fit.fit();
+  term.onData(skicka);
+  window.addEventListener('resize', skickaResize);
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', skickaResize);
+  // Återanslut direkt när fliken blir synlig igen (mobil: skärm låst/upp)
+  document.addEventListener('visibilitychange', () => {
+    if(!document.hidden && (!sock || sock.readyState > 1)) kopplaSocket();
+  });
+  // Håll websocketen vaken genom proxy under inaktivitet
+  setInterval(() => { if(sock && sock.readyState === 1) sock.send('2'); }, 20000);
+  kopplaSocket();
+}
+
+// Skapar (eller återskapar) websocketen mot samma term/auth
+function kopplaSocket(){
+  if(sock && (sock.readyState === 0 || sock.readyState === 1)) return;  // redan igång
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   sock = new WebSocket(proto + '://' + location.host + '/terminal/ws');
-  sock.onopen = () => { sock.send(JSON.stringify(Object.assign(
-    {host:HOST, port:PORT, user:USER, cols:term.cols, rows:term.rows}, auth))); term.focus(); };
-  sock.onmessage = (ev) => term.write(ev.data);
-  sock.onclose = () => term.write('\r\n\x1b[33m[frånkopplad]\x1b[0m\r\n');
-  term.onData(skicka);
-  window.addEventListener('resize', () => { if(fit) fit.fit(); });
+  sock.onopen = () => {
+    aterBackoff = 1000;
+    sock.send(JSON.stringify(Object.assign(
+      {host:HOST, port:PORT, user:USER, cols:term.cols, rows:term.rows}, aktivtAuth)));
+    setTimeout(() => { skickaResize(); skicka('\x0c'); }, 300);  // matcha storlek + rita om
+    term.focus();
+  };
+  sock.onmessage = (ev) => {
+    term.write(ev.data);
+    // Kör startkommandot en kort stund efter första skal-utdatan (ej vid återanslutning)
+    if(startKommando && !startSkickat){
+      startSkickat = true;
+      setTimeout(() => skicka(startKommando + '\r'), 500);
+    }
+  };
+  sock.onclose = () => {
+    if(avsiktligStang) return;
+    term.write('\r\n\x1b[33m[' + tr('återansluter…','reconnecting…') + ']\x1b[0m\r\n');
+    setTimeout(kopplaSocket, aterBackoff);
+    aterBackoff = Math.min(aterBackoff * 2, 5000);  // backoff upp till 5 s
+  };
 }
 function anslut(){ anslutMed({password: document.getElementById('password').value}); }
 document.getElementById('anslut').addEventListener('click', anslut);
 document.getElementById('password').addEventListener('keydown', (e) => { if(e.key==='Enter') anslut(); });
-(function(){
-  const conns = JSON.parse(localStorage.getItem(NYCKEL) || '[]');
-  const m = conns.find(c => c.user===USER && c.host===HOST && String(c.port)===String(PORT));
-  if(m && m.pkey) anslutMed({private_key:m.pkey});
-  else if(m && m.losen) anslutMed({password:m.losen});
-})();
+// Bygg startkommando utifrån vald SSH-klient (sessionsläge) + ev. eget kommando.
+// tmux/screen = beständig session som överlever frånkoppling (mobil, nätbyte).
+function byggStart(klient, cmd, mus){
+  if(klient === 'tmux'){
+    // "tmux set -g mouse on \; new …" slår på mus globalt före anslutning
+    const pre = mus ? 'tmux set -g mouse on \\; ' : 'tmux ';
+    return cmd ? `${pre}new -A -s tunnelo -- bash -lc '${cmd}; exec bash'` : `${pre}new -A -s tunnelo`;
+  }
+  if(klient === 'screen')
+    return cmd ? `screen -DR tunnelo bash -lc '${cmd}; exec bash'` : 'screen -DR tunnelo';
+  return cmd || '';
+}
+// Init körs längst ned när allt är definierat (se initAnslutning())
 
 // Bottenrad med snabbtangenter. Riktiga escape-sekvenser (JS-strängar så \x tolkas).
 // Ctrl+bokstav = teckenkod & 0x1f (t.ex. Ctrl+C = \x03, Ctrl+L = \x0c).
@@ -168,88 +248,182 @@ const SEKV = {
   ca:'\x01', ce:'\x05', ck:'\x0b', cu:'\x15', cw:'\x17'
 };
 // Tangentuppsättningar. {k:...} = sekvens ovan, {x:...} = råtecken, {s:1} = avdelare.
+// Ordning: vanligast först. Verktygstips (t) tvåspråkiga via tr().
 const CLAUDE = [
-  {k:'stab',l:'⇧Tab',t:'Shift+Tab – växla läge (plan/auto)'},
-  {k:'esc',l:'Esc',t:'Esc – avbryt'}, {k:'ee',l:'Esc·Esc',t:'Ångra/redigera förra'},
-  {k:'up',l:'↑',t:'Historik upp'}, {k:'down',l:'↓',t:'Historik ned'},
-  {k:'tab',l:'Tab',t:'Komplettera filväg'}, {x:'@',l:'@',t:'Nämn fil'},
-  {k:'cc',l:'^C',t:'Ctrl+C'}, {k:'cr',l:'^R',t:'Visa mer utdata'},
-  {s:1}, {x:'/',l:'/',t:'Slash-kommando'},
-  {k:'left',l:'←'}, {k:'right',l:'→'}, {k:'ret',l:'⏎'}
+  {k:'esc',l:'Esc',t:tr('Esc – avbryt','Esc – cancel')},
+  {k:'stab',l:'⇧Tab',t:tr('Shift+Tab – växla läge','Shift+Tab – switch mode')},
+  {k:'cc',l:'^C',t:'Ctrl+C'},
+  {x:'/',l:'/',t:tr('Slash-kommando','Slash command')}, {x:'@',l:'@',t:tr('Nämn fil','Mention file')},
+  {k:'cr',l:'^R',t:tr('Visa mer utdata','Show more output')},
+  {s:1},
+  {x:'claude -r\r',l:'claude -r',t:tr('Återuppta Claude-session','Resume Claude session')},
+  {k:'tab',l:'Tab',t:tr('Komplettera filväg','Complete path')}, {k:'ee',l:'Esc·Esc',t:tr('Ångra/redigera förra','Undo/edit last')},
+  {k:'ret',l:'⏎'}
 ];
 const CLI = [
-  {k:'esc',l:'Esc'}, {k:'tab',l:'Tab'},
-  {k:'up',l:'↑'}, {k:'down',l:'↓'}, {k:'left',l:'←'}, {k:'right',l:'→'},
-  {s:1}, {k:'cc',l:'^C',t:'Avbryt'}, {k:'cd',l:'^D',t:'EOF/avsluta'},
-  {k:'cl',l:'^L',t:'Rensa skärm'}, {k:'cr',l:'^R',t:'Sök historik'},
-  {k:'cz',l:'^Z',t:'Pausa'}, {k:'ca',l:'^A',t:'Radbörjan'}, {k:'ce',l:'^E',t:'Radslut'},
-  {k:'ck',l:'^K',t:'Radera till slut'}, {k:'cu',l:'^U',t:'Radera till början'},
-  {k:'cw',l:'^W',t:'Radera ord'}, {s:1},
+  {k:'cc',l:'^C',t:tr('Avbryt','Cancel')}, {k:'cl',l:'^L',t:tr('Rensa skärm','Clear screen')},
+  {k:'tab',l:'Tab',t:tr('Komplettera','Complete')}, {k:'cr',l:'^R',t:tr('Sök historik','Search history')},
+  {k:'cd',l:'^D',t:tr('EOF/avsluta','EOF/exit')}, {k:'esc',l:'Esc'}, {k:'cz',l:'^Z',t:tr('Pausa','Suspend')},
+  {s:1}, {k:'ca',l:'^A',t:tr('Radbörjan','Line start')}, {k:'ce',l:'^E',t:tr('Radslut','Line end')},
+  {k:'cu',l:'^U',t:tr('Radera till början','Delete to start')}, {k:'ck',l:'^K',t:tr('Radera till slut','Delete to end')},
+  {k:'cw',l:'^W',t:tr('Radera ord','Delete word')}, {s:1},
   {x:'|',l:'|'}, {x:'~',l:'~'}, {x:'-',l:'-'}, {k:'ret',l:'⏎'}
 ];
-// "Båda" = Claude + de CLI-tangenter som inte redan finns.
-const BADA = CLAUDE.concat([{s:1}], CLI.filter(d => d.k && !CLAUDE.some(c => c.k===d.k) && !['ret'].includes(d.k)),
-                           CLI.filter(d => d.x));
-const UPPSATTN = {claude:CLAUDE, cli:CLI, bada:BADA};
+// tmux: prefix Ctrl+b (\x02) + tangent. screen: prefix Ctrl+a (\x01) + tangent.
+const TMUX = [
+  {x:'\x02c',l:tr('Nytt','New'),t:tr('Ctrl+b c – nytt fönster','Ctrl+b c – new window')},
+  {x:'\x02n',l:'→win',t:tr('Ctrl+b n – nästa fönster','Ctrl+b n – next window')},
+  {x:'\x02p',l:'←win',t:tr('Ctrl+b p – föregående fönster','Ctrl+b p – previous window')},
+  {x:'\x02w',l:tr('Lista','List'),t:tr('Ctrl+b w – lista fönster','Ctrl+b w – list windows')}, {s:1},
+  {x:'\x02%',l:tr('Dela│','Split│'),t:tr('Ctrl+b % – dela lodrätt','Ctrl+b % – split vertical')},
+  {x:'\x02"',l:tr('Dela─','Split─'),t:tr('Ctrl+b " – dela vågrätt','Ctrl+b " – split horizontal')},
+  {x:'\x02z',l:'Zoom',t:tr('Ctrl+b z – zooma panel','Ctrl+b z – zoom pane')},
+  {x:'\x02o',l:tr('Panel','Pane'),t:tr('Ctrl+b o – nästa panel','Ctrl+b o – next pane')},
+  {x:'\x02x',l:tr('Stäng','Close'),t:tr('Ctrl+b x – stäng panel','Ctrl+b x – close pane')}, {s:1},
+  {x:'\x02[',l:tr('Skrolla','Scroll'),t:tr('Ctrl+b [ – bläddra (q avslutar)','Ctrl+b [ – scroll (q to exit)')},
+  {x:'\x02d',l:tr('Koppla','Detach'),t:tr('Ctrl+b d – koppla från','Ctrl+b d – detach')}
+];
+const SCREEN = [
+  {x:'\x01c',l:tr('Nytt','New'),t:tr('Ctrl+a c – nytt fönster','Ctrl+a c – new window')},
+  {x:'\x01n',l:'→win',t:tr('Ctrl+a n – nästa fönster','Ctrl+a n – next window')},
+  {x:'\x01p',l:'←win',t:tr('Ctrl+a p – föregående fönster','Ctrl+a p – previous window')},
+  {x:'\x01"',l:tr('Lista','List'),t:tr('Ctrl+a " – lista fönster','Ctrl+a " – list windows')}, {s:1},
+  {x:'\x01S',l:tr('Dela─','Split─'),t:tr('Ctrl+a S – dela vågrätt','Ctrl+a S – split horizontal')},
+  {x:'\x01|',l:tr('Dela│','Split│'),t:tr('Ctrl+a | – dela lodrätt','Ctrl+a | – split vertical')},
+  {x:'\x01\t',l:tr('Panel','Pane'),t:tr('Ctrl+a Tab – nästa del','Ctrl+a Tab – next region')},
+  {x:'\x01X',l:tr('Stäng','Close'),t:tr('Ctrl+a X – stäng del','Ctrl+a X – close region')}, {s:1},
+  {x:'\x01\x1b',l:tr('Skrolla','Scroll'),t:tr('Ctrl+a Esc – bläddra','Ctrl+a Esc – scroll')},
+  {x:'\x01d',l:tr('Koppla','Detach'),t:tr('Ctrl+a d – koppla från','Ctrl+a d – detach')}
+];
+const UPPSATTN = {claude:CLAUDE, cli:CLI, tmux:TMUX, screen:SCREEN};
+const TANGENT_ORDNING = ['claude', 'cli', 'tmux', 'screen'];
 
 // Inställningar (per webbläsare, sparas i localStorage)
 const INST_NYCKEL = 'tunnelo_term_inst';
 function lasInst(){ try { return JSON.parse(localStorage.getItem(INST_NYCKEL)) || {}; } catch(e){ return {}; } }
 function sparaInst(o){ localStorage.setItem(INST_NYCKEL, JSON.stringify(o)); }
-let inst = Object.assign({tangenter:'claude', filer:true}, lasInst());
+let inst = Object.assign({tset:['claude'], filer:true}, lasInst());
+// Migrera gammalt enkelval (tangenter) → flervalslista (tset)
+if(inst.tangenter && !Array.isArray(inst.tset)){
+  inst.tset = inst.tangenter === 'bada' ? ['claude','cli'] : [inst.tangenter];
+}
+if(!Array.isArray(inst.tset)) inst.tset = ['claude'];
+delete inst.tangenter;
+
+// Spara snabbtangentvalet på anslutningen (granulärt → kläm ingen annan)
+function sparaTset(){
+  const m = minPost();
+  if(!m) return;
+  m.tset = (inst.tset || []).slice();
+  fetch('/anslutningar/spara', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({anslutning: m})}).catch(()=>{});
+}
 
 function ritaTbar(){
   const tbar = document.getElementById('tbar'); tbar.innerHTML = '';
-  (UPPSATTN[inst.tangenter] || CLAUDE).forEach(d => {
-    if(d.s){ const s=document.createElement('span'); s.className='sep'; tbar.appendChild(s); return; }
-    const b = document.createElement('button'); b.className='k'; b.textContent = d.l;
-    if(d.t) b.title = d.t;
-    b.addEventListener('click', () => skicka(d.k ? SEKV[d.k] : d.x));
-    b.addEventListener('mousedown', e => e.preventDefault()); // behåll fokus i terminalen
-    tbar.appendChild(b);
+  const sep = () => { const s=document.createElement('span'); s.className='sep'; tbar.appendChild(s); };
+  const valda = TANGENT_ORDNING.filter(n => (inst.tset || []).includes(n));
+  valda.forEach((namn, i) => {
+    if(i > 0) sep();                      // avdelare mellan uppsättningar
+    UPPSATTN[namn].forEach(d => {
+      if(d.s){ sep(); return; }
+      const b = document.createElement('button'); b.className='k'; b.textContent = d.l;
+      if(d.t) b.title = d.t;
+      b.addEventListener('click', () => skicka(d.k ? SEKV[d.k] : d.x));
+      b.addEventListener('mousedown', e => e.preventDefault()); // behåll fokus i terminalen
+      tbar.appendChild(b);
+    });
   });
 }
 function tillampaInst(){
   document.getElementById('filknapp').style.display = inst.filer ? '' : 'none';
   document.querySelectorAll('#segTang button').forEach(b =>
-    b.classList.toggle('pa', b.dataset.val === inst.tangenter));
+    b.classList.toggle('pa', (inst.tset || []).includes(b.dataset.val)));
   document.getElementById('chkFiler').checked = inst.filer;
   ritaTbar();
   if(fit) fit.fit();
 }
-document.getElementById('instknapp').addEventListener('click', () => {
-  const p = document.getElementById('inst'); p.style.display = p.style.display==='block' ? 'none' : 'block';
-  document.getElementById('meny').style.display='none';
+// Refresh: matcha pty-storlek + Ctrl-L → skalet/appen ritar om hela skärmen
+document.getElementById('refreshknapp').addEventListener('mousedown', e => e.preventDefault());
+document.getElementById('refreshknapp').addEventListener('click', () => { skickaResize(); skicka('\x0c'); });
+
+// Tight pilgrupp: alltid tillgängliga piltangenter
+document.querySelectorAll('#pilar .k').forEach(b => {
+  b.addEventListener('mousedown', e => e.preventDefault());
+  b.addEventListener('click', () => skicka(SEKV[b.dataset.pil]));
+});
+
+// --- Mikrofon push-to-talk: håll inne, tala, släpp → Whisper skriver texten ---
+(function(){
+  const mik = document.getElementById('mikknapp');
+  let rec = null, bitar = [], spelar = false;
+
+  async function start(e){
+    e.preventDefault();
+    if(spelar) return;
+    try {
+      const strom = await navigator.mediaDevices.getUserMedia({audio:true});
+      rec = new MediaRecorder(strom);
+      bitar = [];
+      rec.ondataavailable = ev => bitar.push(ev.data);
+      rec.onstop = () => { strom.getTracks().forEach(t => t.stop()); skickaLjud(); };
+      rec.start();
+      spelar = true;
+      mik.classList.add('rec');            // röd = spelar in
+    } catch(err){ term.write(`\r\n\x1b[31m[mik: ${err.message}]\x1b[0m\r\n`); }
+  }
+  function stopp(e){
+    if(e) e.preventDefault();
+    if(!spelar || !rec) return;
+    spelar = false; rec.stop();
+    mik.classList.remove('rec'); mik.classList.add('busy');   // dämpad = transkriberar
+  }
+  async function skickaLjud(){
+    const blob = new Blob(bitar, {type:'audio/webm'});
+    const fd = new FormData(); fd.append('ljud', blob, 'tal.webm');
+    try {
+      const r = await fetch('/stt', {method:'POST', body:fd});
+      const d = await r.json();
+      if(d.text) skicka(d.text);       // skriv texten (utan Enter — granska själv)
+      else term.write(`\r\n\x1b[33m[${tr('inget tal uppfattat','no speech detected')}]\x1b[0m\r\n`);
+    } catch(err){ term.write(`\r\n\x1b[31m[${tr('stt-fel','stt error')}: ${err.message}]\x1b[0m\r\n`); }
+    mik.classList.remove('busy');
+  }
+  // Fungerar för både mus och touch (pointer-events)
+  mik.addEventListener('pointerdown', start);
+  mik.addEventListener('pointerup', stopp);
+  mik.addEventListener('pointerleave', stopp);
+  mik.addEventListener('pointercancel', stopp);
+})();
+
+document.getElementById('instknapp').addEventListener('click', async () => {
+  const p = document.getElementById('inst'); const visa = p.style.display !== 'block';
+  if(visa){ await laddaMina(); byggMeny(); }   // färsk lista från servern varje gång
+  p.style.display = visa ? 'block' : 'none';
 });
 document.querySelectorAll('#segTang button').forEach(b => b.addEventListener('click', () => {
-  inst.tangenter = b.dataset.val; sparaInst(inst); tillampaInst();
+  const v = b.dataset.val; const s = new Set(inst.tset || []);
+  s.has(v) ? s.delete(v) : s.add(v);          // toggla på/av
+  inst.tset = [...s]; sparaInst(inst); sparaTset(); tillampaInst();
 }));
 document.getElementById('chkFiler').addEventListener('change', e => {
   inst.filer = e.target.checked; sparaInst(inst); tillampaInst();
 });
 tillampaInst();
 
-// Håll terminalen rätt storlek när mobilens tangentbord ändrar synlig yta
-if(window.visualViewport){
-  window.visualViewport.addEventListener('resize', () => { if(fit) fit.fit(); });
-}
-
 // Anslutningar-meny
 function oppna(c){ const q = new URLSearchParams({host:c.host, user:c.user, port:c.port});
   window.open('/terminal/session?' + q.toString(), '_blank', 'width=980,height=640,noopener'); }
 function byggMeny(){
   const meny = document.getElementById('meny');
-  const conns = JSON.parse(localStorage.getItem(NYCKEL) || '[]').sort((a,b)=>(b.favorit?1:0)-(a.favorit?1:0));
+  const conns = [...MINA].sort((a,b)=>(b.favorit?1:0)-(a.favorit?1:0));
   meny.innerHTML = '';
   conns.forEach(c => { const r = document.createElement('div'); r.className='rad';
     r.textContent = `${c.user}@${c.host}:${c.port}`;
-    r.onclick = () => { oppna(c); meny.style.display='none'; }; meny.appendChild(r); });
-  const ny = document.createElement('div'); ny.className='rad ny'; ny.textContent='+ Ny anslutning…';
+    r.onclick = () => { oppna(c); document.getElementById('inst').style.display='none'; }; meny.appendChild(r); });
+  const ny = document.createElement('div'); ny.className='rad ny'; ny.textContent = tr('+ Ny anslutning…','+ New connection…');
   ny.onclick = () => window.open('/terminal', '_blank'); meny.appendChild(ny);
 }
-document.getElementById('menyknapp').addEventListener('click', () => {
-  const meny = document.getElementById('meny'); const visa = meny.style.display !== 'block';
-  if(visa) byggMeny(); meny.style.display = visa ? 'block' : 'none'; });
 
 // ---- Filpanel (SFTP + lokalt filsystem) ----
 let fjarrVag = '.', lokalDir = null;
@@ -341,6 +515,23 @@ document.getElementById('filknapp').addEventListener('click', () => {
   document.getElementById('filknapp').classList.toggle('pa', visa);
   if(visa){ ritaFjarr(); if(lokalDir) ritaLokal(); }
 });
+
+// Init: hämta anslutningarna från servern, ställ in denna anslutning och koppla upp
+async function initAnslutning(){
+  await laddaMina();
+  const m = minPost();
+  if(m){
+    startKommando = byggStart(m.klient, m.cmd || '', m.mus !== false);
+    if(Array.isArray(m.tset)) inst.tset = m.tset.slice();
+    else inst.tset = m.klient==='tmux' ? ['tmux','claude']
+                   : m.klient==='screen' ? ['screen','claude'] : ['claude'];
+    tillampaInst();
+    if(m.pkey) return anslutMed({private_key:m.pkey});
+    if(m.losen) return anslutMed({password:m.losen});
+  }
+  // Ingen sparad auth → låt användaren skriva lösenord (login-rutan visas redan)
+}
+initAnslutning();
 </script>
 </body>
 </html>
