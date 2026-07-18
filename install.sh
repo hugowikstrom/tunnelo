@@ -1,108 +1,137 @@
 #!/usr/bin/env bash
 #
-# Tunnelo — installationsskript. Hämtar koden från GitHub, ställer några frågor
-# och sätter upp allt (Python-miljö, .env, valfri Caddy + systemd).
+# Tunnelo – installationsskript.
+# Installerar ALLA beroenden (tmux, screen, ffmpeg, ev. VNC, KB-Whisper …),
+# drar koden från GitHub och sätter upp systemd-tjänsten. Kör sedan
+# konfigurera.py för admin-inloggning och ev. nycklar.
 #
-# Kör:
-#   curl -sSL https://raw.githubusercontent.com/hugowikstrom/tunnelo/master/install.sh | bash
-# (privat repo → gör det publikt eller ha git-inloggning; annars: klona själv och
-#  kör  bash install.sh  inifrån mappen.)
+# Kör som root:
+#   curl -sSL https://raw.githubusercontent.com/hugowikstrom/tunnelo/master/install.sh | sudo bash
+# eller från en klon:
+#   sudo bash install.sh
 #
-set -e
+set -euo pipefail
 
-REPO="https://github.com/hugowikstrom/tunnelo.git"
-DIR="${TUNNELO_DIR:-$HOME/tunnelo}"
+# ---- Inställningar (kan överstyras med miljövariabler) ----
+REPO="${TUNNELO_REPO:-https://github.com/hugowikstrom/tunnelo.git}"
+DIR="${TUNNELO_DIR:-/opt/tunnelo}"            # var koden hamnar
+PORT="${TUNNELO_WEBPORT:-8090}"               # Flask-port (bakom Caddy)
+SERVICE_USER="${TUNNELO_USER:-root}"          # tjänsten kör som denna användare
+LOGGDIR="${TUNNELO_LOGG:-/var/log/tunnelo}"
 
-blip(){ printf "\n\033[1;36m==> %s\033[0m\n" "$1"; }
-fraga(){ local svar; read -rp "$1" svar; echo "${svar:-$2}"; }
+say(){ printf "\n\033[1;36m==> %s\033[0m\n" "$*"; }
+# Läs från terminalen (funkar även vid  curl … | sudo bash )
+fraga(){ local s; read -rp "$1 [j/N]: " s </dev/tty; [[ "$s" =~ ^[jJyY]$ ]]; }
 
-blip "Tunnelo-installation"
+[[ $EUID -eq 0 ]] || { echo "Kör som root (sudo bash install.sh)"; exit 1; }
 
-# 1) Hämta/uppdatera koden ----------------------------------------------------
-if [ -d "$DIR/.git" ]; then
-  echo "Uppdaterar befintlig installation i $DIR"
-  git -C "$DIR" pull --ff-only || true
-elif [ -d server ] && [ -f server/webapp.py ]; then
-  DIR="$(pwd)"; echo "Kör i befintlig kopia: $DIR"
+# ---- 1. Systempaket (grund) ----
+say "Installerar systempaket"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y git python3 python3-venv python3-pip tmux screen ffmpeg curl
+
+say "Grafiskt skrivbord (VNC + xfce) – stort, behövs bara för Grafik-läget."
+if fraga "Installera TigerVNC + xfce"; then
+  apt-get install -y tigervnc-standalone-server tigervnc-common xfce4 xfce4-terminal dbus-x11 || true
+  VNC=1
 else
-  echo "Klonar Tunnelo till $DIR"
+  VNC=0
+fi
+
+fraga "Installera espeak-ng (bara för att testa tal-till-text)" && apt-get install -y espeak-ng || true
+
+# ---- 2. Hämta koden ----
+say "Hämtar koden till $DIR"
+if [[ -d "$DIR/.git" ]]; then
+  git -C "$DIR" pull --ff-only
+else
+  mkdir -p "$(dirname "$DIR")"
   git clone "$REPO" "$DIR"
 fi
 cd "$DIR/server"
 
-# 2) Frågor -------------------------------------------------------------------
-blip "Konfiguration (tryck Enter för förslaget inom hakparentes)"
-DOMAN=$(fraga "Domän (t.ex. tunnelo.exempel.se) [localhost]: " "localhost")
-WEBPORT=$(fraga "Flask-port bakom Caddy [8090]: " "8090")
-HUBPORT=$(fraga "WireGuard-navets UDP-port [51820]: " "51820")
-RESEND=$(fraga "Resend API-nyckel för mail (valfritt, Enter för hoppa över): " "")
-MAILFROM=$(fraga "Avsändaradress [Tunnelo <onboarding@resend.dev>]: " "Tunnelo <onboarding@resend.dev>")
-
-# 3) Python-miljö -------------------------------------------------------------
-blip "Skapar Python-miljö och installerar beroenden"
-command -v python3 >/dev/null || { echo "python3 saknas — installera det först."; exit 1; }
+# ---- 3. Python-miljö + beroenden ----
+say "Skapar venv och installerar Python-beroenden"
 python3 -m venv venv
-./venv/bin/pip install -q --upgrade pip
-./venv/bin/pip install -q -r requirements.txt
-echo "Klart."
+./venv/bin/python -m pip install --upgrade pip -q
+./venv/bin/python -m pip install -q -r requirements.txt
 
-# 4) .env ---------------------------------------------------------------------
-blip "Skriver server/.env"
-cat > .env <<ENV
-TUNNELO_ENDPOINT=$DOMAN
-TUNNELO_WEBPORT=$WEBPORT
-TUNNELO_HUB_PORT=$HUBPORT
-TUNNELO_RESEND_KEY=$RESEND
-TUNNELO_MAIL_FROM=$MAILFROM
-ENV
-chmod 600 .env
-echo ".env skapad (hemligheter, gitignorad)."
+# ---- 4. Ladda ner KB-Whisper (svensk tal-till-text) ----
+say "Laddar ner KB-Whisper – kan ta en stund"
+./venv/bin/python - <<'PY' || echo "  (misslyckades – laddas vid första mic-användningen i stället)"
+from faster_whisper import WhisperModel
+WhisperModel("KBLab/kb-whisper-small", device="cpu", compute_type="int8")
+print("  KB-Whisper nedladdad")
+PY
 
-# 5) WireGuard-koll -----------------------------------------------------------
-command -v wg >/dev/null || echo "OBS: WireGuard (wg) saknas — installera: sudo apt install wireguard"
+# ---- 5. Hemligheter + loggkatalog ----
+say "Förbereder nyckel och loggkatalog"
+[[ -f secret.key ]] || ./venv/bin/python -c "import secrets,pathlib; pathlib.Path('secret.key').write_text(secrets.token_hex(32))"
+chmod 600 secret.key
+mkdir -p "$LOGGDIR"
 
-# 6) Caddy (valfritt) ---------------------------------------------------------
-if command -v caddy >/dev/null && [ "$DOMAN" != "localhost" ]; then
-  if [[ "$(fraga "Lägg till Caddy-block för $DOMAN (HTTPS)? [j/N]: " "N")" =~ ^[jJyY] ]]; then
-    sudo cp /etc/caddy/Caddyfile "/etc/caddy/Caddyfile.bak.tunnelo-$(date +%s)" 2>/dev/null || true
-    sudo tee -a /etc/caddy/Caddyfile >/dev/null <<CADDY
-
-$DOMAN {
-	encode zstd gzip
-	reverse_proxy localhost:$WEBPORT
-}
-CADDY
-    sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && \
-      sudo systemctl reload caddy && echo "Caddy uppdaterad."
-  fi
-fi
-
-# 7) systemd-tjänst (valfritt) ------------------------------------------------
-if [[ "$(fraga "Starta Tunnelo automatiskt vid boot (systemd)? [j/N]: " "N")" =~ ^[jJyY] ]]; then
-  sudo tee /etc/systemd/system/tunnelo.service >/dev/null <<UNIT
+# ---- 6. systemd-tjänst ----
+say "Installerar systemd-tjänsten tunnelo-portal"
+cat > /etc/systemd/system/tunnelo-portal.service <<EOF
 [Unit]
-Description=Tunnelo VPN-portal
+Description=Tunnelo portal (Flask, port $PORT, bakom Caddy)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=root
+User=$SERVICE_USER
 WorkingDirectory=$DIR/server
-ExecStart=$DIR/server/venv/bin/python $DIR/server/webapp.py
+Environment=TUNNELO_WEBPORT=$PORT
+ExecStart=$DIR/server/venv/bin/python webapp.py
 Restart=on-failure
 RestartSec=3
+StandardOutput=append:$LOGGDIR/tunnelo-portal.log
+StandardError=append:$LOGGDIR/tunnelo-portal.log
 
 [Install]
 WantedBy=multi-user.target
-UNIT
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now tunnelo.service
-  echo "Tjänsten 'tunnelo' startad och aktiverad vid boot."
-else
-  blip "Starta manuellt"
-  echo "  cd $DIR/server && sudo ./venv/bin/python webapp.py"
+EOF
+systemctl daemon-reload
+
+# ---- 7. VNC-skrivbord (om valt) ----
+if [[ "${VNC:-0}" == "1" ]]; then
+  say "Sätter upp VNC-skrivbord (xfce) på :1 / localhost:5901"
+  HOME_DIR=$(getent passwd "$SERVICE_USER" | cut -d: -f6)
+  mkdir -p "$HOME_DIR/.vnc"
+  cat > "$HOME_DIR/.vnc/xstartup" <<'EOF'
+#!/bin/sh
+unset SESSION_MANAGER; unset DBUS_SESSION_BUS_ADDRESS
+exec dbus-launch startxfce4
+EOF
+  chmod +x "$HOME_DIR/.vnc/xstartup"
+  echo "  Starta skrivbordet: vncserver :1 -geometry 1440x900 -localhost yes -SecurityTypes None"
 fi
 
-blip "Färdigt!"
-echo "Öppna  https://$DOMAN  och skapa administratören vid första inloggningen."
+# ---- 8. Konfiguration (admin-login, ev. nycklar) ----
+say "Kör konfigurationen"
+./venv/bin/python "$DIR/konfigurera.py" || \
+  echo "  Hoppade över – kör senare: $DIR/server/venv/bin/python $DIR/konfigurera.py"
+
+# ---- 9. Starta tjänsten ----
+say "Startar tjänsten"
+systemctl enable --now tunnelo-portal
+sleep 2
+systemctl --no-pager --lines=0 status tunnelo-portal || true
+
+cat <<EOF
+
+$(printf '\033[1;32mKlart!\033[0m') Tunnelo körs på http://localhost:$PORT
+
+För HTTPS – lägg en Caddy-block (byt domän):
+
+  din-domän.se {
+      encode zstd gzip
+      reverse_proxy localhost:$PORT {
+          transport http { read_timeout 600s; write_timeout 600s }
+      }
+  }
+
+Nycklar (Resend/SMTP) kan läggas in nu eller senare under "Konfiguration" i appen.
+EOF

@@ -2,3 +2,5 @@ flask
 qrcode
 flask-sock
 paramiko
+# Tal-till-text (mikrofon). Drar in numpy, av, ctranslate2, onnxruntime automatiskt.
+faster-whisper
