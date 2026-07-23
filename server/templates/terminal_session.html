@@ -176,12 +176,17 @@ let avsiktligStang = false, aterBackoff = 1000;  // för auto-återanslutning
 
 // Opcode-prefix: '0'=tangenttryck, '1'=resize, '2'=ping
 const PEKSKARM = matchMedia('(pointer: coarse)').matches;  // mobil/surfplatta
-let senasteMarkering = '';  // senaste markerade texten (även om den hunnit släckas)
+// Senaste markeringen sparas en kort stund så kopiera-knappen hinner användas
+// även om mobilen släckt markeringen. Tidsgräns → aldrig gammal skräptext.
+let senasteMarkering = '', markeringTid = 0;
+const MARKERING_TTL = 90000;  // 90 s
+function sparaMarkering(s){ if(s && s.trim()){ senasteMarkering = s; markeringTid = Date.now(); } }
+function hamtaMarkering(){
+  return (Date.now() - markeringTid < MARKERING_TTL) ? senasteMarkering : '';
+}
 // Fånga även webbläsarens egen markering (mobil långtryck markerar ibland så)
-document.addEventListener('selectionchange', () => {
-  const s = window.getSelection ? String(window.getSelection()) : '';
-  if(s.trim()) senasteMarkering = s;
-});
+document.addEventListener('selectionchange', () =>
+  sparaMarkering(window.getSelection ? String(window.getSelection()) : ''));
 function skicka(d){
   if(sock && sock.readyState === 1) sock.send('0' + d);
   // Fokusera bara på dator, eller om terminalen redan har fokus —
@@ -210,7 +215,8 @@ function anslutMed(auth){
   aktivtAuth = auth;
   document.getElementById('login').remove();
   document.getElementById('session').style.display = 'flex';
-  term = new Terminal({fontSize:14, theme:{background:'#0d1117'}});
+  // scrollback 5000: mer historik att scrolla upp i (utanför tmux)
+  term = new Terminal({fontSize:14, scrollback:5000, theme:{background:'#0d1117'}});
   fit = new FitAddon.FitAddon(); term.loadAddon(fit);
   term.open(document.getElementById('term')); fit.fit();
   // Kopiera/klistra in (Ctrl+Shift+C är webbläsarens DevTools – kan ej blockeras):
@@ -234,7 +240,7 @@ function anslutMed(auth){
   term.onData(skicka);
   // Kom ihåg senaste markeringen — mobilen släcker den när man trycker på
   // kopiera-knappen, så knappen måste kunna kopiera i efterhand
-  term.onSelectionChange(() => { const s = term.getSelection(); if(s) senasteMarkering = s; });
+  term.onSelectionChange(() => sparaMarkering(term.getSelection()));
   window.addEventListener('resize', skickaResize);
   if(window.visualViewport) window.visualViewport.addEventListener('resize', skickaResize);
   // Återanslut direkt när fliken blir synlig igen (mobil: skärm låst/upp)
@@ -404,7 +410,7 @@ kopKn.addEventListener('mousedown', e => e.preventDefault());
 kopKn.addEventListener('click', () => {
   // Ta aktuell markering om den finns, annars den senast sparade
   // (mobilen släcker markeringen redan när man trycker på knappen)
-  const sel = (term && term.getSelection()) || senasteMarkering;
+  const sel = (term && term.getSelection()) || hamtaMarkering();
   if(sel){
     navigator.clipboard.writeText(sel).catch(()=>{});
     if(term) term.clearSelection();
@@ -530,7 +536,8 @@ async function ritaFjarr(){
 }
 async function laddaNer(namn){
   if(!lokalDir){ alert('Välj en lokal mapp först.'); return; }
-  const body = Object.assign({host:HOST,user:USER,port:PORT,path:fjarrVag+'/'+namn}, aktivtAuth);
+  // replace(/\/$/,'') → undvik dubbelt snedstreck när fjärrvägen är "/"
+  const body = Object.assign({host:HOST,user:USER,port:PORT,path:fjarrVag.replace(/\/$/,'')+'/'+namn}, aktivtAuth);
   const r = await fetch('/sftp/download', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   const blob = await r.blob();
   const fh = await lokalDir.getFileHandle(namn, {create:true});
