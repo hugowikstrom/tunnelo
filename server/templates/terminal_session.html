@@ -120,6 +120,12 @@
         <button class="ghost ikonknapp" id="refreshknapp" title="Rita om skärmen (bra vid återanslutning)">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>
         </button>
+        <button class="ghost ikonknapp" id="kopieraknapp" title="{{ 'Copy selection' if lang=='en' else 'Kopiera markering' }}">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button class="ghost ikonknapp" id="klistraknapp" title="{{ 'Paste' if lang=='en' else 'Klistra in' }}">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 4h2a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+        </button>
         <button class="ghost" id="instknapp" title="{{ 'Menu & settings' if lang=='en' else 'Meny & inställningar' }}">⚙</button>
       </div>
       <div id="pilar">
@@ -169,7 +175,31 @@ function minPost(){ return MINA.find(c => c.user===USER && c.host===HOST && Stri
 let avsiktligStang = false, aterBackoff = 1000;  // för auto-återanslutning
 
 // Opcode-prefix: '0'=tangenttryck, '1'=resize, '2'=ping
-function skicka(d){ if(sock && sock.readyState === 1) sock.send('0' + d); if(term) term.focus(); }
+const PEKSKARM = matchMedia('(pointer: coarse)').matches;  // mobil/surfplatta
+let senasteMarkering = '';  // senaste markerade texten (även om den hunnit släckas)
+// Fånga även webbläsarens egen markering (mobil långtryck markerar ibland så)
+document.addEventListener('selectionchange', () => {
+  const s = window.getSelection ? String(window.getSelection()) : '';
+  if(s.trim()) senasteMarkering = s;
+});
+function skicka(d){
+  if(sock && sock.readyState === 1) sock.send('0' + d);
+  // Fokusera bara på dator, eller om terminalen redan har fokus —
+  // annars öppnar snabbtangenterna mobilens tangentbord i onödan
+  if(term && (!PEKSKARM || document.activeElement === term.textarea)) term.focus();
+}
+// Klistra in från urklipp. Chrome frågar om tillstånd första gången — visa
+// en hint i terminalen om svaret dröjer (annars ser det ut som att inget händer).
+function klistra(){
+  let klart = false;
+  setTimeout(() => { if(!klart) term.write('\r\n\x1b[33m[' +
+    tr('väntar på urklipps-tillstånd – klicka Tillåt uppe vid adressfältet',
+       'waiting for clipboard permission – click Allow near the address bar') + ']\x1b[0m\r\n'); }, 1200);
+  navigator.clipboard.readText()
+    .then(t => { klart = true; if(t) skicka(t); })
+    .catch(() => { klart = true; term.write('\r\n\x1b[31m[' +
+      tr('urklippsåtkomst nekad','clipboard access denied') + ']\x1b[0m\r\n'); });
+}
 function skickaResize(){
   if(fit) fit.fit();
   if(sock && sock.readyState === 1 && term)
@@ -183,7 +213,28 @@ function anslutMed(auth){
   term = new Terminal({fontSize:14, theme:{background:'#0d1117'}});
   fit = new FitAddon.FitAddon(); term.loadAddon(fit);
   term.open(document.getElementById('term')); fit.fit();
+  // Kopiera/klistra in (Ctrl+Shift+C är webbläsarens DevTools – kan ej blockeras):
+  //  Ctrl+C  = kopiera OM text är markerad, annars vanligt avbryt (^C)
+  //  Ctrl+Insert = kopiera · Shift+Insert / Ctrl+Shift+V = klistra in
+  term.attachCustomKeyEventHandler((e) => {
+    if(e.type !== 'keydown') return true;
+    const kopiera = () => { const s = term.getSelection();
+      if(s){ navigator.clipboard.writeText(s).catch(()=>{}); term.clearSelection(); return true; } return false; };
+    if(e.ctrlKey && !e.shiftKey && (e.code === 'KeyC' || e.code === 'Insert')){
+      if(kopiera()){ e.preventDefault(); return false; }
+      if(e.code === 'Insert'){ e.preventDefault(); return false; }  // Insert ska aldrig skickas
+      return true;                                                  // ingen markering → låt ^C avbryta
+    }
+    if((e.shiftKey && e.code === 'Insert') || (e.ctrlKey && e.shiftKey && e.code === 'KeyV')){
+      klistra();
+      e.preventDefault(); return false;
+    }
+    return true;
+  });
   term.onData(skicka);
+  // Kom ihåg senaste markeringen — mobilen släcker den när man trycker på
+  // kopiera-knappen, så knappen måste kunna kopiera i efterhand
+  term.onSelectionChange(() => { const s = term.getSelection(); if(s) senasteMarkering = s; });
   window.addEventListener('resize', skickaResize);
   if(window.visualViewport) window.visualViewport.addEventListener('resize', skickaResize);
   // Återanslut direkt när fliken blir synlig igen (mobil: skärm låst/upp)
@@ -205,7 +256,7 @@ function kopplaSocket(){
     sock.send(JSON.stringify(Object.assign(
       {host:HOST, port:PORT, user:USER, cols:term.cols, rows:term.rows}, aktivtAuth)));
     setTimeout(() => { skickaResize(); skicka('\x0c'); }, 300);  // matcha storlek + rita om
-    term.focus();
+    if(!PEKSKARM) term.focus();  // på mobil: öppna inte tangentbordet automatiskt
   };
   sock.onmessage = (ev) => {
     term.write(ev.data);
@@ -346,6 +397,29 @@ function tillampaInst(){
 // Refresh: matcha pty-storlek + Ctrl-L → skalet/appen ritar om hela skärmen
 document.getElementById('refreshknapp').addEventListener('mousedown', e => e.preventDefault());
 document.getElementById('refreshknapp').addEventListener('click', () => { skickaResize(); skicka('\x0c'); });
+
+// Kopiera markering / klistra in (knappar – samma som Ctrl+Shift+C/V)
+const kopKn = document.getElementById('kopieraknapp');
+kopKn.addEventListener('mousedown', e => e.preventDefault());
+kopKn.addEventListener('click', () => {
+  // Ta aktuell markering om den finns, annars den senast sparade
+  // (mobilen släcker markeringen redan när man trycker på knappen)
+  const sel = (term && term.getSelection()) || senasteMarkering;
+  if(sel){
+    navigator.clipboard.writeText(sel).catch(()=>{});
+    if(term) term.clearSelection();
+    senasteMarkering = '';
+    // Grön blink som kvitto — skriv inget i terminalen (du kan ha skrollat upp)
+    kopKn.style.color = '#3fb950';
+    setTimeout(() => { kopKn.style.color = ''; }, 900);
+  } else {
+    // Röd blink = ingen markering att kopiera
+    kopKn.style.color = '#f85149';
+    setTimeout(() => { kopKn.style.color = ''; }, 900);
+  }
+});
+document.getElementById('klistraknapp').addEventListener('mousedown', e => e.preventDefault());
+document.getElementById('klistraknapp').addEventListener('click', () => klistra());
 
 // Tight pilgrupp: alltid tillgängliga piltangenter
 document.querySelectorAll('#pilar .k').forEach(b => {
